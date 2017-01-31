@@ -1,0 +1,38 @@
+version: 0.0.{build}
+os:
+  - Visual Studio 2013
+clone_depth: 1
+branches:
+  only:
+    - dcmqi
+skip_tags: true
+clone_folder: c:\DCMTK
+configuration:
+  - Release
+platform:
+  - x64
+before_build:
+  - cmd: cmake --version
+  - cmd: mkdir c:\DCMTK\DCMTK-install
+  - cmd: mkdir c:\DCMTK\DCMTK-build
+  - cmd: cd c:\DCMTK\DCMTK-build
+  - cmd: cmake -G "Visual Studio 12 2013 Win64" -DCMAKE_BUILD_TYPE:STRING=Release -DBUILD_SHARED_LIBS:BOOL=ON -DDCMTK_WITH_DOXYGEN:BOOL=OFF -DDCMTK_WITH_ZLIB:BOOL=OFF    -DDCMTK_WITH_OPENSSL:BOOL=OFF -DDCMTK_WITH_PNG:BOOL=OFF -DDCMTK_WITH_TIFF:BOOL=OFF -DDCMTK_WITH_XML:BOOL=OFF -DDCMTK_WITH_ICONV:BOOL=OFF -DDCMTK_FORCE_FPIC_ON_UNIX:BOOL=ON -DDCMTK_OVERWRITE_WIN32_COMPILER_FLAGS:BOOL=OFF -DDCMTK_ENABLE_BUILTIN_DICTIONARY:BOOL=ON -DDCMTK_ENABLE_PRIVATE_TAGS:BOOL=ON -DCMAKE_INSTALL_PREFIX:PATH=c:\DCMTK\DCMTK-install c:\DCMTK
+  - cmd: dir
+build_script:
+  - cmd: type DCMTK.sln
+  - cmd: msbuild DCMTK.sln /m
+  - cmd: msbuild INSTALL.vcxproj
+cache:
+  - C:\ProgramData\chocolatey\bin
+  - C:\ProgramData\chocolatey\lib
+artifacts:
+  - path: DCMTK-install
+    name: DCMTK-dcmqi
+    type: zip
+deploy:
+    release: DCMTK-dcmqi-3.6.1_20160812-VS12-Win64-Release-v$(appveyor_build_version)
+    provider: GitHub
+    description: 'DCMTK packaged by appveyor for dcmqi'
+    artifact: DCMTK-dcmqi
+    auth_token:
+      secure: 4dfwfR70YnDCRYjOJT2YrHDR3rxMTkKALX2P7pfVcjrXHLiRYny0OLNYe88CFqiT
