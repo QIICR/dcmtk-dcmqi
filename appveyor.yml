@@ -35,4 +35,4 @@ deploy:
     description: 'DCMTK packaged by appveyor for dcmqi'
     artifact: DCMTK-dcmqi
     auth_token:
-      secure: 4dfwfR70YnDCRYjOJT2YrHDR3rxMTkKALX2P7pfVcjrXHLiRYny0OLNYe88CFqiT
+      secure: ffHRHxe8buygkDl6kRw4vaNaH/ikYGoDn3TXfZ42cFXq7986houCT7/7qB8o5Vvf
