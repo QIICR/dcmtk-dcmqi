@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1994-2016, OFFIS e.V.
+ *  Copyright (C) 1994-2017, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -274,6 +274,12 @@ parseVR(char *&s, DcmEVR &vr)
         vr = EVR_UNKNOWN;
         s += 2;
     }
+    // dcmdump uses "??" in case of "Unknown Tag & Data" and implicit VR
+    else if ((*s == '?') && (*(s + 1) == '?'))
+    {
+        vr = EVR_UNKNOWN;
+        s += 2;
+    }
     else ok = OFFalse;
 
     return ok;
@@ -526,7 +532,7 @@ insertIntoSet(DcmStack &stack, const E_TransferSyntax xfer, const DcmTagKey &tag
         else if (newTagVR == EVR_pixelItem)
             newElement = new DcmPixelItem(DCM_PixelItemTag);
         else
-            newElementError = newDicomElement(newElement, tag);
+            newElementError = DcmItem::newDicomElement(newElement, tag);
 
         if (newElementError == EC_Normal)
         {

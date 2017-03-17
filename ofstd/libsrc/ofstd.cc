@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 2001-2016, OFFIS e.V.
+ *  Copyright (C) 2001-2017, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -1815,6 +1815,16 @@ double OFStandard::atof(const char *s, OFBool *success)
         if (*p == '+') ++p;
     }
 
+    //Check for special cases like NaN
+    if ((p[0] == 'n' || p[0] == 'N') && (p[1] == 'a' || p[1] == 'A') && (p[2] == 'n' || p[2] == 'N')) {
+        if (success) *success = OFTrue;
+        return OFnumeric_limits<double>::quiet_NaN();
+    }
+
+    if ((p[0] == 'i' || p[0] == 'I') && (p[1] == 'n' || p[1] == 'N') && (p[2] == 'f' || p[2] == 'F')) {
+        if (success) *success = OFTrue;
+        return sign ? -OFnumeric_limits<double>::infinity() : OFnumeric_limits<double>::infinity();
+    }
     // Count the number of digits in the mantissa (including the decimal
     // point), and also locate the decimal point.
 
@@ -2583,6 +2593,15 @@ int OFrand_r(unsigned int &seed)
   return OFstatic_cast(int, seed);
 }
 
+void OFStandard::trimString(const char*& pBegin, const char*& pEnd)
+{
+  assert(pBegin <= pEnd);
+  while(pBegin != pEnd && (*pBegin == ' ' || !*pBegin))
+    ++pBegin;
+  while(pBegin != pEnd && (*(pEnd-1) == ' ' || !*(pEnd-1)))
+    --pEnd;
+}
+
 #define MAX_NAME 65536
 
 OFStandard::OFHostent OFStandard::getHostByName( const char* name )
@@ -2838,12 +2857,12 @@ OFString OFStandard::getUserName()
         name,
         -1,
         &*buf.begin(),
-        buf.size(),
+        OFstatic_cast(int, buf.size()),
         OFnullptr,
         OFnullptr
     );
     return &*buf.begin();
-#elif defined(HAVE_CUSERID)
+#elif defined(HAVE_CUSERID) && !defined(__CYGWIN__)
     char buf[L_cuserid];
     return cuserid( buf );
 #elif defined(HAVE_GETLOGIN)

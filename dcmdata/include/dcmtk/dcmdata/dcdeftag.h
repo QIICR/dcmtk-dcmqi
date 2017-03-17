@@ -4,7 +4,7 @@
 **
 **   User: joergr
 **   Host: thinkpad
-**   Date: 2016-11-10 13:56:09
+**   Date: 2017-03-10 17:31:48
 **   Prog: /home/joergr/Source/dcmtk-full/public/dcmdata/libsrc/mkdeftag
 **
 **   From: ../data/dicom.dic
@@ -17,12 +17,12 @@
 
 #include "dcmtk/dcmdata/dctagkey.h"
 
-#define DCM_DICT_DEFTAG_BUILD_DATE "2016-11-10 13:56:09"
+#define DCM_DICT_DEFTAG_BUILD_DATE "2017-03-10 17:31:48"
 
 
 /*
 ** Fixed Tags in ascending (gggg,eeee) order.
-** Number of entries: 4172
+** Number of entries: 4176
 ** Tags with a repeating component (repeating tags) are listed later.
 */
 #define DCM_CommandGroupLength                   DcmTagKey(0x0000, 0x0000)
@@ -338,6 +338,10 @@
 #define DCM_StrainSource                         DcmTagKey(0x0010, 0x0217)
 #define DCM_StrainAdditionalInformation          DcmTagKey(0x0010, 0x0218)
 #define DCM_StrainCodeSequence                   DcmTagKey(0x0010, 0x0219)
+#define DCM_GeneticModificationsSequence         DcmTagKey(0x0010, 0x0221)
+#define DCM_GeneticModificationsDescription      DcmTagKey(0x0010, 0x0222)
+#define DCM_GeneticModificationsNomenclature     DcmTagKey(0x0010, 0x0223)
+#define DCM_GeneticModificationsCodeSequence     DcmTagKey(0x0010, 0x0229)
 #define DCM_OtherPatientIDs                      DcmTagKey(0x0010, 0x1000)
 #define DCM_OtherPatientNames                    DcmTagKey(0x0010, 0x1001)
 #define DCM_OtherPatientIDsSequence              DcmTagKey(0x0010, 0x1002)
@@ -2795,7 +2799,7 @@
 #define DCM_HPGLDocumentID                       DcmTagKey(0x0068, 0x62d0)
 #define DCM_HPGLDocumentLabel                    DcmTagKey(0x0068, 0x62d5)
 #define DCM_ViewOrientationCodeSequence          DcmTagKey(0x0068, 0x62e0)
-#define DCM_ViewOrientationModifier              DcmTagKey(0x0068, 0x62f0)
+#define DCM_ViewOrientationModifierCodeSequence  DcmTagKey(0x0068, 0x62f0)
 #define DCM_HPGLDocumentScaling                  DcmTagKey(0x0068, 0x62f2)
 #define DCM_HPGLDocument                         DcmTagKey(0x0068, 0x6300)
 #define DCM_HPGLContourPenNumber                 DcmTagKey(0x0068, 0x6310)

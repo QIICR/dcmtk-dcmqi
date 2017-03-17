@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1993-2014, OFFIS e.V.
+ *  Copyright (C) 1993-2017, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -77,7 +77,10 @@ END_EXTERN_C
 #endif
 
 #ifdef WITH_ZLIB
-#include <zlib.h>        /* for zlibVersion() */
+#include <zlib.h>                      /* for zlibVersion() */
+#endif
+#ifdef DCMTK_ENABLE_CHARSET_CONVERSION
+#include "dcmtk/ofstd/ofchrenc.h"      /* for OFCharacterEncoding */
 #endif
 
 #ifndef OFFIS_CONSOLE_APPLICATION
@@ -197,6 +200,9 @@ main(int argc, char *argv[])
       cmd.addOption("--prefer-mpeg2-high",      "+xh",       "prefer MPEG2 Main Profile @ High Level TS");
       cmd.addOption("--prefer-mpeg4",           "+xn",       "prefer MPEG4 AVC/H.264 HP / Level 4.1 TS");
       cmd.addOption("--prefer-mpeg4-bd",        "+xl",       "prefer MPEG4 AVC/H.264 BD-compatible TS");
+      cmd.addOption("--prefer-mpeg4-2-2d",      "+x2",       "prefer MPEG4 AVC/H.264 HP / Level 4.2 TS (2D)");
+      cmd.addOption("--prefer-mpeg4-2-3d",      "+x3",       "prefer MPEG4 AVC/H.264 HP / Level 4.2 TS (3D)");
+      cmd.addOption("--prefer-mpeg4-2-st",      "+xo",       "prefer MPEG4 AVC/H.264 Stereo / Level 4.2 TS");
       cmd.addOption("--prefer-rle",             "+xr",       "prefer RLE lossless TS");
 #ifdef WITH_ZLIB
       cmd.addOption("--prefer-deflated",        "+xd",       "prefer deflated expl. VR little endian TS");
@@ -217,10 +223,13 @@ main(int argc, char *argv[])
       cmd.addOption("--propose-j2k-lossy",      "-xw",       "propose JPEG 2000 lossy TS\nand all uncompressed transfer syntaxes");
       cmd.addOption("--propose-jls-lossless",   "-xt",       "propose JPEG-LS lossless TS\nand all uncompressed transfer syntaxes");
       cmd.addOption("--propose-jls-lossy",      "-xu",       "propose JPEG-LS lossy TS\nand all uncompressed transfer syntaxes");
-      cmd.addOption("--propose-mpeg2",          "-xm",       "propose MPEG2 Main Profile @ Main Level TS only");
-      cmd.addOption("--propose-mpeg2-high",     "-xh",       "propose MPEG2 Main Profile @ High Level TS only");
-      cmd.addOption("--propose-mpeg4",          "-xn",       "propose MPEG4 AVC/H.264 HP / Level 4.1 TS only");
-      cmd.addOption("--propose-mpeg4-bd",       "-xl",       "propose MPEG4 AVC/H.264 BD-compatible TS only");
+      cmd.addOption("--propose-mpeg2",          "-xm",       "propose MPEG2 Main Profile @ Main Level TS");
+      cmd.addOption("--propose-mpeg2-high",     "-xh",       "propose MPEG2 Main Profile @ High Level TS");
+      cmd.addOption("--propose-mpeg4",          "-xn",       "propose MPEG4 AVC/H.264 HP / Level 4.1 TS");
+      cmd.addOption("--propose-mpeg4-bd",       "-xl",       "propose MPEG4 AVC/H.264 BD-compatible TS");
+      cmd.addOption("--propose-mpeg4-2-2d",     "-x2",       "propose MPEG4 AVC/H.264 HP / Level 4.2 TS (2D)");
+      cmd.addOption("--propose-mpeg4-2-3d",     "-x3",       "propose MPEG4 AVC/H.264 HP / Level 4.2 TS (3D)");
+      cmd.addOption("--propose-mpeg4-2-st",     "-xo",       "propose MPEG4 AVC/H.264 Stereo / Level 4.2 TS");
       cmd.addOption("--propose-rle",            "-xr",       "propose RLE lossless TS\nand all uncompressed transfer syntaxes");
 #ifdef WITH_ZLIB
       cmd.addOption("--propose-deflated",       "-xd",       "propose deflated expl. VR little endian TS\nand all uncompressed transfer syntaxes");
@@ -291,6 +300,28 @@ main(int argc, char *argv[])
                                                             "0=uncompressed, 1=fastest, 9=best compression");
 #endif
 
+#ifdef DCMTK_ENABLE_CHARSET_CONVERSION
+    cmd.addSubGroup("specific character set:");
+      cmd.addOption("--use-request-charset",    "+Cr",    "try to convert all element values that are\n"
+                                                          "affected by Specific Character Set (0008,0005)\n"
+                                                          "to the one specified in the request data set,\n"
+                                                          "fall back to the one specified via\n"
+                                                          "--convert-to-xxx if that is not possible\n"
+                                                          "(default, unless overridden by config file)");
+      cmd.addOption("--override-charset",       "-Cr",    "convert affected element values to the character\n"
+                                                          "set specified via --convert-to-xxx, ignoring\n"
+                                                          "the one specified in the request");
+      cmd.addOption("--convert-to-ascii",       "+A7",    "convert affected element values to 7-bit ASCII\n"
+                                                          "(default, unless overridden by config file)");
+      cmd.addOption("--convert-to-utf8",        "+U8",    "convert affected element values to UTF-8");
+      cmd.addOption("--convert-to-latin1",      "+L1",    "convert affected element values to ISO 8859-1");
+      cmd.addOption("--convert-to-charset",     "+C",  1, "[c]harset: string",
+                                                          "convert affected element values to the character\n"
+                                                          "set specified by the DICOM defined term c");
+      cmd.addOption("--transliterate",          "-Ct",    "try to approximate characters that cannot be\nrepresented through similar looking characters");
+      cmd.addOption("--discard-illegal",        "-Cd",    "discard characters that cannot be represented\nin destination character set");
+#endif
+
     /* evaluate command line */
     prepareCmdLineArgs(argc, argv, OFFIS_CONSOLE_APPLICATION);
     if (app.parseCommandLine(cmd, argc, argv))
@@ -302,7 +333,7 @@ main(int argc, char *argv[])
         {
           app.printHeader(OFTrue /*print host identifier*/);
           COUT << OFendl << "External libraries used:";
-#if !defined(WITH_ZLIB) && !defined(WITH_TCPWRAPPER)
+#if !defined(WITH_ZLIB) && !defined(WITH_TCPWRAPPER) && !defined(DCMTK_ENABLE_CHARSET_CONVERSION)
           COUT << " none" << OFendl;
 #else
           COUT << OFendl;
@@ -312,6 +343,9 @@ main(int argc, char *argv[])
 #endif
 #ifdef WITH_TCPWRAPPER
           COUT << "- LIBWRAP" << OFendl;
+#endif
+#ifdef DCMTK_ENABLE_CHARSET_CONVERSION
+          COUT << "- " << OFCharacterEncoding::getLibraryVersionString() << OFendl;
 #endif
           return 0;
         }
@@ -380,6 +414,9 @@ main(int argc, char *argv[])
       if (cmd.findOption("--prefer-mpeg2-high")) options.networkTransferSyntax_ = EXS_MPEG2MainProfileAtHighLevel;
       if (cmd.findOption("--prefer-mpeg4")) options.networkTransferSyntax_ = EXS_MPEG4HighProfileLevel4_1;
       if (cmd.findOption("--prefer-mpeg4-bd")) options.networkTransferSyntax_ = EXS_MPEG4BDcompatibleHighProfileLevel4_1;
+      if (cmd.findOption("--prefer-mpeg4-2-2d")) options.networkTransferSyntax_ = EXS_MPEG4HighProfileLevel4_2_For2DVideo;
+      if (cmd.findOption("--prefer-mpeg4-2-3d")) options.networkTransferSyntax_ = EXS_MPEG4HighProfileLevel4_2_For3DVideo;
+      if (cmd.findOption("--prefer-mpeg4-2-st")) options.networkTransferSyntax_ = EXS_MPEG4StereoHighProfileLevel4_2;
       if (cmd.findOption("--prefer-rle")) options.networkTransferSyntax_ = EXS_RLELossless;
 #ifdef WITH_ZLIB
       if (cmd.findOption("--prefer-deflated")) options.networkTransferSyntax_ = EXS_DeflatedLittleEndianExplicit;
@@ -405,6 +442,9 @@ main(int argc, char *argv[])
       if (cmd.findOption("--propose-mpeg2-high")) options.networkTransferSyntaxOut_ = EXS_MPEG2MainProfileAtHighLevel;
       if (cmd.findOption("--propose-mpeg4")) options.networkTransferSyntaxOut_ = EXS_MPEG4HighProfileLevel4_1;
       if (cmd.findOption("--propose-mpeg4-bd")) options.networkTransferSyntaxOut_ = EXS_MPEG4BDcompatibleHighProfileLevel4_1;
+      if (cmd.findOption("--propose-mpeg4-2-2d")) options.networkTransferSyntaxOut_ = EXS_MPEG4HighProfileLevel4_2_For2DVideo;
+      if (cmd.findOption("--propose-mpeg4-2-3d")) options.networkTransferSyntaxOut_ = EXS_MPEG4HighProfileLevel4_2_For3DVideo;
+      if (cmd.findOption("--propose-mpeg4-2-st")) options.networkTransferSyntaxOut_ = EXS_MPEG4StereoHighProfileLevel4_2;
       if (cmd.findOption("--propose-rle")) options.networkTransferSyntaxOut_ = EXS_RLELossless;
 #ifdef WITH_ZLIB
       if (cmd.findOption("--propose-deflated")) options.networkTransferSyntaxOut_ = EXS_DeflatedLittleEndianExplicit;
@@ -480,6 +520,9 @@ main(int argc, char *argv[])
         app.checkConflict("--write-xfer-little", "--prefer-mpeg2-high", options.networkTransferSyntax_ == EXS_MPEG2MainProfileAtHighLevel);
         app.checkConflict("--write-xfer-little", "--prefer-mpeg4", options.networkTransferSyntax_ == EXS_MPEG4HighProfileLevel4_1);
         app.checkConflict("--write-xfer-little", "--prefer-mpeg4-bd", options.networkTransferSyntax_ == EXS_MPEG4BDcompatibleHighProfileLevel4_1);
+        app.checkConflict("--write-xfer-little", "--prefer-mpeg4-2-2d", options.networkTransferSyntax_ == EXS_MPEG4HighProfileLevel4_2_For2DVideo);
+        app.checkConflict("--write-xfer-little", "--prefer-mpeg4-2-3d", options.networkTransferSyntax_ == EXS_MPEG4HighProfileLevel4_2_For3DVideo);
+        app.checkConflict("--write-xfer-little", "--prefer-mpeg4-2-st", options.networkTransferSyntax_ == EXS_MPEG4StereoHighProfileLevel4_2);
         app.checkConflict("--write-xfer-little", "--prefer-rle", options.networkTransferSyntax_ == EXS_RLELossless);
         // we don't have to check a conflict for --prefer-deflated because we can always convert that to uncompressed.
 #endif
@@ -500,6 +543,9 @@ main(int argc, char *argv[])
         app.checkConflict("--write-xfer-big", "--prefer-mpeg2-high", options.networkTransferSyntax_ == EXS_MPEG2MainProfileAtHighLevel);
         app.checkConflict("--write-xfer-big", "--prefer-mpeg4", options.networkTransferSyntax_ == EXS_MPEG4HighProfileLevel4_1);
         app.checkConflict("--write-xfer-big", "--prefer-mpeg4-bd", options.networkTransferSyntax_ == EXS_MPEG4BDcompatibleHighProfileLevel4_1);
+        app.checkConflict("--write-xfer-big", "--prefer-mpeg4-2-2d", options.networkTransferSyntax_ == EXS_MPEG4HighProfileLevel4_2_For2DVideo);
+        app.checkConflict("--write-xfer-big", "--prefer-mpeg4-2-3d", options.networkTransferSyntax_ == EXS_MPEG4HighProfileLevel4_2_For3DVideo);
+        app.checkConflict("--write-xfer-big", "--prefer-mpeg4-2-st", options.networkTransferSyntax_ == EXS_MPEG4StereoHighProfileLevel4_2);
         app.checkConflict("--write-xfer-big", "--prefer-rle", options.networkTransferSyntax_ == EXS_RLELossless);
         // we don't have to check a conflict for --prefer-deflated because we can always convert that to uncompressed.
 #endif
@@ -520,6 +566,9 @@ main(int argc, char *argv[])
         app.checkConflict("--write-xfer-implicit", "--prefer-mpeg2-high", options.networkTransferSyntax_ == EXS_MPEG2MainProfileAtHighLevel);
         app.checkConflict("--write-xfer-implicit", "--prefer-mpeg4", options.networkTransferSyntax_ == EXS_MPEG4HighProfileLevel4_1);
         app.checkConflict("--write-xfer-implicit", "--prefer-mpeg4-bd", options.networkTransferSyntax_ == EXS_MPEG4BDcompatibleHighProfileLevel4_1);
+        app.checkConflict("--write-xfer-implicit", "--prefer-mpeg4-2-2d", options.networkTransferSyntax_ == EXS_MPEG4HighProfileLevel4_2_For2DVideo);
+        app.checkConflict("--write-xfer-implicit", "--prefer-mpeg4-2-3d", options.networkTransferSyntax_ == EXS_MPEG4HighProfileLevel4_2_For3DVideo);
+        app.checkConflict("--write-xfer-implicit", "--prefer-mpeg4-2-st", options.networkTransferSyntax_ == EXS_MPEG4StereoHighProfileLevel4_2);
         app.checkConflict("--write-xfer-implicit", "--prefer-rle", options.networkTransferSyntax_ == EXS_RLELossless);
         // we don't have to check a conflict for --prefer-deflated because we can always convert that to uncompressed.
 #endif
@@ -541,6 +590,9 @@ main(int argc, char *argv[])
         app.checkConflict("--write-xfer-deflated", "--prefer-mpeg2-high", options.networkTransferSyntax_ == EXS_MPEG2MainProfileAtHighLevel);
         app.checkConflict("--write-xfer-deflated", "--prefer-mpeg4", options.networkTransferSyntax_ == EXS_MPEG4HighProfileLevel4_1);
         app.checkConflict("--write-xfer-deflated", "--prefer-mpeg4-bd", options.networkTransferSyntax_ == EXS_MPEG4BDcompatibleHighProfileLevel4_1);
+        app.checkConflict("--write-xfer-deflated", "--prefer-mpeg4-2-2d", options.networkTransferSyntax_ == EXS_MPEG4HighProfileLevel4_2_For2DVideo);
+        app.checkConflict("--write-xfer-deflated", "--prefer-mpeg4-2-3d", options.networkTransferSyntax_ == EXS_MPEG4HighProfileLevel4_2_For3DVideo);
+        app.checkConflict("--write-xfer-deflated", "--prefer-mpeg4-2-st", options.networkTransferSyntax_ == EXS_MPEG4StereoHighProfileLevel4_2);
         app.checkConflict("--write-xfer-deflated", "--prefer-rle", options.networkTransferSyntax_ == EXS_RLELossless);
 #endif
         options.writeTransferSyntax_ = EXS_DeflatedLittleEndianExplicit;
@@ -642,6 +694,35 @@ main(int argc, char *argv[])
       return 10;
     }
     if (overrideMaxPDU > 0) options.maxPDU_ = overrideMaxPDU;
+
+#ifdef DCMTK_ENABLE_CHARSET_CONVERSION
+    /* character set conversion options */
+    DcmQueryRetrieveCharacterSetOptions& characterSetOptions = config.getCharacterSetOptions();
+    if (!(characterSetOptions.flags & DcmQueryRetrieveCharacterSetOptions::Configured))
+      characterSetOptions.flags = DcmQueryRetrieveCharacterSetOptions::Configured | DcmQueryRetrieveCharacterSetOptions::Fallback;
+    cmd.beginOptionBlock();
+    if (cmd.findOption("--use-request-charset")) {
+      characterSetOptions.flags &= ~DcmQueryRetrieveCharacterSetOptions::Override;
+    }
+    if (cmd.findOption("--override-charset")) {
+      characterSetOptions.flags |= DcmQueryRetrieveCharacterSetOptions::Override;
+    }
+    cmd.endOptionBlock();
+
+    cmd.beginOptionBlock();
+    if (cmd.findOption("--convert-to-utf8")) characterSetOptions.characterSet = "ISO_IR 192";
+    if (cmd.findOption("--convert-to-latin1")) characterSetOptions.characterSet = "ISO_IR 100";
+    if (cmd.findOption("--convert-to-ascii")) characterSetOptions.characterSet = "";
+    if (cmd.findOption("--convert-to-charset")) app.checkValue(cmd.getValue(characterSetOptions.characterSet));
+    cmd.endOptionBlock();
+
+    if (cmd.findOption("--transliterate")) {
+      characterSetOptions.conversionFlags |= DCMTypes::CF_transliterate;
+    }
+    if (cmd.findOption("--discard-illegal")) {
+      characterSetOptions.conversionFlags |= DCMTypes::CF_discardIllegal;
+    }
+#endif // DCMTK_ENABLE_CHARSET_CONVERSION
 
     /* make sure data dictionary is loaded */
     if (!dcmDataDict.isDictionaryLoaded()) {

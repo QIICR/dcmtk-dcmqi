@@ -4,7 +4,7 @@
 **
 **   User: joergr
 **   Host: thinkpad
-**   Date: 2016-11-10 13:56:09
+**   Date: 2017-03-10 17:31:48
 **   Prog: /home/joergr/Source/dcmtk-full/public/dcmdata/libsrc/mkdictbi
 **
 **   From: ../data/dicom.dic
@@ -2120,6 +2120,22 @@ static const DBI_SimpleEntry simpleBuiltinDict[] = {
       NULL }
   , { 0x0010, 0x0219, 0x0010, 0x0219,
       EVR_SQ, "StrainCodeSequence", 1, 1, "DICOM",
+      DcmDictRange_Unspecified, DcmDictRange_Unspecified,
+      NULL }
+  , { 0x0010, 0x0221, 0x0010, 0x0221,
+      EVR_SQ, "GeneticModificationsSequence", 1, 1, "DICOM",
+      DcmDictRange_Unspecified, DcmDictRange_Unspecified,
+      NULL }
+  , { 0x0010, 0x0222, 0x0010, 0x0222,
+      EVR_UC, "GeneticModificationsDescription", 1, 1, "DICOM",
+      DcmDictRange_Unspecified, DcmDictRange_Unspecified,
+      NULL }
+  , { 0x0010, 0x0223, 0x0010, 0x0223,
+      EVR_LO, "GeneticModificationsNomenclature", 1, 1, "DICOM",
+      DcmDictRange_Unspecified, DcmDictRange_Unspecified,
+      NULL }
+  , { 0x0010, 0x0229, 0x0010, 0x0229,
+      EVR_SQ, "GeneticModificationsCodeSequence", 1, 1, "DICOM",
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       NULL }
   , { 0x0010, 0x1000, 0x0010, 0x1000,
@@ -15233,15 +15249,15 @@ static const DBI_SimpleEntry simpleBuiltinDict[] = {
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       NULL }
   , { 0x0028, 0x1230, 0x0028, 0x1230,
-      EVR_SQ, "StoredValueColorRangeSequence", 1, 1, "DICOM/CP_1584",
+      EVR_SQ, "StoredValueColorRangeSequence", 1, 1, "DICOM",
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       NULL }
   , { 0x0028, 0x1231, 0x0028, 0x1231,
-      EVR_FD, "MinimumStoredValueMapped", 1, 1, "DICOM/CP_1584",
+      EVR_FD, "MinimumStoredValueMapped", 1, 1, "DICOM",
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       NULL }
   , { 0x0028, 0x1232, 0x0028, 0x1232,
-      EVR_FD, "MaximumStoredValueMapped", 1, 1, "DICOM/CP_1584",
+      EVR_FD, "MaximumStoredValueMapped", 1, 1, "DICOM",
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       NULL }
   , { 0x0028, 0x1300, 0x0028, 0x1300,
@@ -21075,7 +21091,7 @@ static const DBI_SimpleEntry simpleBuiltinDict[] = {
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       NULL }
   , { 0x0062, 0x0007, 0x0062, 0x0007,
-      EVR_SQ, "SegmentationAlgorithmIdentificationSequence", 1, 1, "DICOM/CP_1597",
+      EVR_SQ, "SegmentationAlgorithmIdentificationSequence", 1, 1, "DICOM",
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       NULL }
   , { 0x0062, 0x0008, 0x0062, 0x0008,
@@ -21503,7 +21519,7 @@ static const DBI_SimpleEntry simpleBuiltinDict[] = {
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       NULL }
   , { 0x0068, 0x62f0, 0x0068, 0x62f0,
-      EVR_FD, "ViewOrientationModifier", 9, 9, "DICOM",
+      EVR_SQ, "ViewOrientationModifierCodeSequence", 1, 1, "DICOM",
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       NULL }
   , { 0x0068, 0x62f2, 0x0068, 0x62f2,
@@ -23147,7 +23163,7 @@ static const DBI_SimpleEntry simpleBuiltinDict[] = {
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       NULL }
   , { 0x0076, 0x0034, 0x0076, 0x0034,
-      EVR_CS, "ComponentTypeCodeSequence", 1, 1, "DICOM",
+      EVR_SQ, "ComponentTypeCodeSequence", 1, 1, "DICOM",
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       NULL }
   , { 0x0076, 0x0036, 0x0076, 0x0036,
@@ -25277,7 +25293,7 @@ static const DBI_SimpleEntry simpleBuiltinDict[] = {
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       NULL }
   , { 0x3008, 0x0067, 0x3008, 0x0067,
-      EVR_US, "ParameterValueNumber", 1, 1, "DICOM/CP_1611",
+      EVR_US, "ParameterValueNumber", 1, 1, "DICOM",
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       NULL }
   , { 0x3008, 0x0068, 0x3008, 0x0068,
@@ -26861,7 +26877,7 @@ static const DBI_SimpleEntry simpleBuiltinDict[] = {
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       NULL }
   , { 0x300a, 0x038f, 0x300a, 0x038f,
-      EVR_FL, "ScanSpotTimeOffset", 1, -1, "DICOM/CP_1609",
+      EVR_FL, "ScanSpotTimeOffset", 1, -1, "DICOM",
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       NULL }
   , { 0x300a, 0x0390, 0x300a, 0x0390,

@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1994-2016, OFFIS e.V.
+ *  Copyright (C) 1994-2017, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -137,6 +137,7 @@ static const UIDNameMap uidNameMap[] = {
     { UID_HEVCMain10ProfileLevel5_1TransferSyntax,             "HEVCMain10Profile/Level5.1" },
     { UID_RFC2557MIMEEncapsulationTransferSyntax,              "RFC2557MIMEEncapsulation" },
     { UID_XMLEncodingTransferSyntax,                           "XMLEncoding" },
+    { UID_PrivateGE_LEI_WithBigEndianPixelDataTransferSyntax,  "PrivateGELittleEndianImplicitWithBigEndianPixelData" },
 
     // Storage (DICOM)
     { UID_AcquisitionContextSRStorage,                         "AcquisitionContextSRStorage" },
@@ -153,6 +154,7 @@ static const UIDNameMap uidNameMap[] = {
     { UID_CardiacElectrophysiologyWaveformStorage,             "CardiacElectrophysiologyWaveformStorage" },
     { UID_ChestCADSRStorage,                                   "ChestCADSRStorage" },
     { UID_ColonCADSRStorage,                                   "ColonCADSRStorage" },
+    { UID_ColorPaletteStorage,                                 "ColorPaletteStorage" },
     { UID_ColorSoftcopyPresentationStateStorage,               "ColorSoftcopyPresentationStateStorage" },
     { UID_CompositingPlanarMPRVolumetricPresentationStateStorage, "CompositingPlanarMPRVolumetricPresentationStateStorage" },
     { UID_Comprehensive3DSRStorage,                            "Comprehensive3DSRStorage" },
@@ -260,7 +262,7 @@ static const UIDNameMap uidNameMap[] = {
     { UID_VLSlideCoordinatesMicroscopicImageStorage,           "VLSlideCoordinatesMicroscopicImageStorage" },
     { UID_VLWholeSlideMicroscopyImageStorage,                  "VLWholeSlideMicroscopyImageStorage" },
     { UID_WideFieldOphthalmicPhotographyStereographicProjectionImageStorage, "WideFieldOphthalmicPhotographyStereographicProjectionImageStorage" },
-    { UID_WideFieldOphthalmicPhotography3DCoordinatesImageStorage, "OphthalmicPhotography3DCoordinatesImageStorage" },
+    { UID_WideFieldOphthalmicPhotography3DCoordinatesImageStorage, "WideFieldOphthalmicPhotography3DCoordinatesImageStorage" },
     { UID_XAXRFGrayscaleSoftcopyPresentationStateStorage,      "XAXRFGrayscaleSoftcopyPresentationStateStorage" },
     { UID_XRay3DAngiographicImageStorage,                      "XRay3DAngiographicImageStorage" },
     { UID_XRay3DCraniofacialImageStorage,                      "XRay3DCraniofacialImageStorage" },
@@ -350,8 +352,7 @@ static const UIDNameMap uidNameMap[] = {
     { UID_CardiacRelevantPatientInformationQuery,              "CardiacRelevantPatientInformationQuery" },
     { UID_GeneralRelevantPatientInformationQuery,              "GeneralRelevantPatientInformationQuery" },
 
-    // Color Palette Storage and Query/Retrieve
-    { UID_ColorPaletteStorage,                                 "ColorPaletteStorage" },
+    // Color Palette Query/Retrieve
     { UID_FINDColorPaletteInformationModel,                    "FINDColorPaletteInformationModel" },
     { UID_MOVEColorPaletteInformationModel,                    "MOVEColorPaletteInformationModel" },
     { UID_GETColorPaletteInformationModel,                     "GETColorPaletteInformationModel" },
@@ -546,8 +547,8 @@ static const int uidNameMap_size = OFstatic_cast(int, sizeof(uidNameMap) / sizeo
 /** an array of const strings containing all known Storage SOP Classes
  *  that fit into the conventional PATIENT-STUDY-SERIES-INSTANCE information
  *  model, i.e. everything a Storage SCP might want to store in a PACS.
- *  Special cases such as hanging protocol storage or the Storage SOP Class
- *  are not included in this list.
+ *  Special cases such as the Hanging Protocol or Color Palette Storage SOP
+ *  Class are not included in this list but in dcmNonPatientStorageSOPClassUIDs.
  *
  *  THIS LIST CONTAINS ALL STORAGE SOP CLASSES INCLUDING RETIRED ONES
  *  AND IS (MUCH) LARGER THAN 64 ENTRIES.
@@ -575,7 +576,6 @@ const char* dcmAllStorageSOPClassUIDs[] = {
     UID_ComputedRadiographyImageStorage,
     UID_ContentAssessmentResultsStorage,
     UID_CornealTopographyMapStorage,
-    UID_CTDefinedProcedureProtocolStorage,
     UID_CTImageStorage,
     UID_CTPerformedProcedureProtocolStorage,
     UID_DeformableSpatialRegistrationStorage,
@@ -598,13 +598,10 @@ const char* dcmAllStorageSOPClassUIDs[] = {
     UID_ExtensibleSRStorage,
     UID_GeneralAudioWaveformStorage,
     UID_GeneralECGWaveformStorage,
-    UID_GenericImplantTemplateStorage,
     UID_GrayscalePlanarMPRVolumetricPresentationStateStorage,
     UID_GrayscaleSoftcopyPresentationStateStorage,
     UID_HemodynamicWaveformStorage,
-    UID_ImplantAssemblyTemplateStorage,
     UID_ImplantationPlanSRDocumentStorage,
-    UID_ImplantTemplateGroupStorage,
     UID_IntraocularLensCalculationsStorage,
     UID_IntravascularOpticalCoherenceTomographyImageStorageForPresentation,
     UID_IntravascularOpticalCoherenceTomographyImageStorageForProcessing,
@@ -680,6 +677,8 @@ const char* dcmAllStorageSOPClassUIDs[] = {
     UID_XRayAngiographicImageStorage,
     UID_XRayRadiationDoseSRStorage,
     UID_XRayRadiofluoroscopicImageStorage,
+    // non-patient DICOM objects:
+    // - do not add them here but in dcmNonPatientStorageSOPClassUIDs
     // retired
     UID_RETIRED_HardcopyColorImageStorage,
     UID_RETIRED_HardcopyGrayscaleImageStorage,
@@ -716,7 +715,24 @@ const char* dcmAllStorageSOPClassUIDs[] = {
     NULL
 };
 
-const int numberOfAllDcmStorageSOPClassUIDs = OFstatic_cast(int, sizeof(dcmAllStorageSOPClassUIDs) / sizeof(const char*) - 1);
+const int numberOfDcmAllStorageSOPClassUIDs = OFstatic_cast(int, sizeof(dcmAllStorageSOPClassUIDs) / sizeof(const char*) - 1);
+
+
+/** an array of const strings containing all known Storage SOP Classes
+ *  that do not fit into the conventional PATIENT-STUDY-SERIES-INSTANCE
+ *  information model. See function dcmIsaStorageSOPClassUID().
+ */
+
+const char* dcmNonPatientStorageSOPClassUIDs[] = {
+    UID_ColorPaletteStorage,
+    UID_CTDefinedProcedureProtocolStorage,
+    UID_GenericImplantTemplateStorage,
+    UID_HangingProtocolStorage,
+    UID_ImplantAssemblyTemplateStorage,
+    UID_ImplantTemplateGroupStorage,
+    // end marker (important!)
+    NULL
+};
 
 
 /*  an array of const strings containing all storage SOP classes that
@@ -762,17 +778,17 @@ const char* dcmLongSCUStorageSOPClassUIDs[] = {
     UID_EnhancedXRFImageStorage,
     UID_GeneralAudioWaveformStorage,
     UID_GeneralECGWaveformStorage,
-    UID_GenericImplantTemplateStorage,
     UID_GrayscaleSoftcopyPresentationStateStorage,
     UID_HemodynamicWaveformStorage,
-    UID_ImplantAssemblyTemplateStorage,
     UID_ImplantationPlanSRDocumentStorage,
-    UID_ImplantTemplateGroupStorage,
     UID_IntraocularLensCalculationsStorage,
     UID_IntravascularOpticalCoherenceTomographyImageStorageForPresentation,
     UID_IntravascularOpticalCoherenceTomographyImageStorageForProcessing,
     UID_KeratometryMeasurementsStorage,
     UID_KeyObjectSelectionDocumentStorage,
+    UID_LegacyConvertedEnhancedCTImageStorage,
+    UID_LegacyConvertedEnhancedMRImageStorage,
+    UID_LegacyConvertedEnhancedPETImageStorage,
     UID_LensometryMeasurementsStorage,
     UID_MacularGridThicknessAndVolumeReportStorage,
     UID_MammographyCADSRStorage,
@@ -840,13 +856,9 @@ const char* dcmLongSCUStorageSOPClassUIDs[] = {
 //  UID_CompositingPlanarMPRVolumetricPresentationStateStorage,
 //  UID_ContentAssessmentResultsStorage,
 //  UID_CornealTopographyMapStorage,
-//  UID_CTDefinedProcedureProtocolStorage,
 //  UID_CTPerformedProcedureProtocolStorage,
 //  UID_ExtensibleSRStorage,
 //  UID_GrayscalePlanarMPRVolumetricPresentationStateStorage
-//  UID_LegacyConvertedEnhancedCTImageStorage,
-//  UID_LegacyConvertedEnhancedMRImageStorage,
-//  UID_LegacyConvertedEnhancedPETImageStorage,
 //  UID_ParametricMapStorage,
 //  UID_RadiopharmaceuticalRadiationDoseSRStorage,
 //  UID_RTBrachyApplicationSetupDeliveryInstructionStorage,
@@ -854,6 +866,13 @@ const char* dcmLongSCUStorageSOPClassUIDs[] = {
 //  UID_TractographyResultsStorage,
 //  UID_WideFieldOphthalmicPhotographyStereographicProjectionImageStorage,
 //  UID_WideFieldOphthalmicPhotography3DCoordinatesImageStorage,
+    // non-patient
+//  UID_ColorPaletteStorage,
+//  UID_CTDefinedProcedureProtocolStorage,
+//  UID_GenericImplantTemplateStorage,
+//  UID_HangingProtocolStorage,
+//  UID_ImplantAssemblyTemplateStorage,
+//  UID_ImplantTemplateGroupStorage,
     // retired
     UID_RETIRED_HardcopyColorImageStorage,
     UID_RETIRED_HardcopyGrayscaleImageStorage,
@@ -1098,6 +1117,7 @@ static const DcmModalityTable modalities[] = {
     { UID_CardiacElectrophysiologyWaveformStorage,                 "WVc", 4096 },
     { UID_ChestCADSRStorage,                                       "SRh", 4096 },
     { UID_ColonCADSRStorage,                                       "SRo", 4096 },
+    { UID_ColorPaletteStorage,                                     "CP",  4096 },
     { UID_ColorSoftcopyPresentationStateStorage,                   "PSc", 4096 },
     { UID_CompositingPlanarMPRVolumetricPresentationStateStorage,  "VPc", 4096 },
     { UID_Comprehensive3DSRStorage,                                "SR3", 4096 },
@@ -1131,6 +1151,7 @@ static const DcmModalityTable modalities[] = {
     { UID_GenericImplantTemplateStorage,                           "IT",  4096 },
     { UID_GrayscalePlanarMPRVolumetricPresentationStateStorage,    "VPg", 4096 },
     { UID_GrayscaleSoftcopyPresentationStateStorage,               "PSg", 4096 },
+    { UID_HangingProtocolStorage,                                  "HP",  4096 },
     { UID_HemodynamicWaveformStorage,                              "WVh", 4096 },
     { UID_ImplantAssemblyTemplateStorage,                          "ITa", 4096 },
     { UID_ImplantationPlanSRDocumentStorage,                       "SRi", 4096 },
@@ -1325,15 +1346,35 @@ dcmFindUIDFromName(const char* name)
 /*
 ** dcmIsaStorageSOPClassUID(const char* uid)
 ** Returns true if the uid is one of the Storage SOP Classes.
-** Performs a table lookup in the dcmAllStorageSOPClassUIDs table.
+** Performs a table lookup in the dcmAllStorageSOPClassUIDs,
+** dcmNonPatientStorageSOPClassUIDs and/or dcmImageSOPClassUIDs table.
 */
 OFBool
-dcmIsaStorageSOPClassUID(const char* uid)
+dcmIsaStorageSOPClassUID(const char* uid, const E_StorageSOPClassType type)
 {
     if (uid == NULL) return OFFalse;
-    for (int i = 0; i < numberOfAllDcmStorageSOPClassUIDs; i++) {
-      if (dcmAllStorageSOPClassUIDs[i] != NULL && strcmp(uid, dcmAllStorageSOPClassUIDs[i]) == 0) {
-        return OFTrue;
+    /* check for patient object */
+    if (type & ESSC_Patient) {
+      for (int i = 0; i < numberOfDcmAllStorageSOPClassUIDs; i++) {
+        if (dcmAllStorageSOPClassUIDs[i] != NULL && strcmp(uid, dcmAllStorageSOPClassUIDs[i]) == 0) {
+          return OFTrue;
+        }
+      }
+    }
+    /* check for non-patient object */
+    if (type & ESSC_NonPatient) {
+      for (int i = 0; dcmNonPatientStorageSOPClassUIDs[i] != NULL; i++) {
+        if (strcmp(uid, dcmNonPatientStorageSOPClassUIDs[i]) == 0) {
+          return OFTrue;
+        }
+      }
+    }
+    /* check for image object */
+    if (type & ESSC_Image) {
+      for (int i = 0; i < numberOfDcmImageSOPClassUIDs; i++) {
+        if (dcmImageSOPClassUIDs[i] != NULL && strcmp(uid, dcmImageSOPClassUIDs[i]) == 0) {
+          return OFTrue;
+        }
       }
     }
     return OFFalse;
@@ -1343,18 +1384,11 @@ dcmIsaStorageSOPClassUID(const char* uid)
 /*
 ** dcmIsImageStorageSOPClassUID(const char* uid)
 ** Returns true if the uid is one of the Image Storage SOP Classes.
-** Performs a table lookup in the dcmImageSOPClassUIDs table.
 */
 OFBool
 dcmIsImageStorageSOPClassUID(const char* uid)
 {
-    if (uid == NULL) return OFFalse;
-    for (int i = 0; i < numberOfDcmImageSOPClassUIDs; i++) {
-      if (dcmImageSOPClassUIDs[i] != NULL && strcmp(uid, dcmImageSOPClassUIDs[i]) == 0) {
-        return OFTrue;
-      }
-    }
-    return OFFalse;
+    return dcmIsaStorageSOPClassUID(uid, ESSC_Image);
 }
 
 // ********************************

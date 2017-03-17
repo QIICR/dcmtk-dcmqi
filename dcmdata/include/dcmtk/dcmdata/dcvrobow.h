@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1994-2015, OFFIS e.V.
+ *  Copyright (C) 1994-2017, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -24,7 +24,12 @@
 #define DCVROBOW_H
 
 #include "dcmtk/config/osconfig.h"    /* make sure OS specific configuration is included first */
+
 #include "dcmtk/dcmdata/dcelem.h"
+
+
+// forward declarations
+class DcmJsonFormat;
 
 
 /** a class representing the DICOM value representations 'Other Byte' (OB)
@@ -36,13 +41,15 @@ class DCMTK_DCMDATA_EXPORT DcmOtherByteOtherWord
 
  public:
 
+    // Make friend with DcmItem which requires access to protected
+    // constructor allowing construction using an explicit value length.
+    friend class DcmItem;
+
     /** constructor.
-     *  Create new element from given tag and length.
+     *  Create new element from given tag.
      *  @param tag DICOM tag for the new element
-     *  @param len value length for the new element
      */
-    DcmOtherByteOtherWord(const DcmTag &tag,
-                          const Uint32 len = 0);
+    DcmOtherByteOtherWord(const DcmTag &tag);
 
     /** copy constructor
      *  @param old element to be copied
@@ -167,6 +174,14 @@ class DCMTK_DCMDATA_EXPORT DcmOtherByteOtherWord
      */
     virtual OFCondition writeXML(STD_NAMESPACE ostream&out,
                                  const size_t flags = 0);
+
+    /** write object in JSON format to a stream
+     *  @param out output stream to which the JSON document is written
+     *  @param format used to format and customize the output
+     *  @return status, EC_Normal if successful, an error code otherwise
+     */
+    virtual OFCondition writeJson(STD_NAMESPACE ostream&out,
+                                  DcmJsonFormat &format);
 
     /** special write method for creation of digital signatures
      *  @param outStream DICOM output stream
@@ -307,6 +322,20 @@ class DCMTK_DCMDATA_EXPORT DcmOtherByteOtherWord
 
 
  protected:
+
+    /** constructor. Create new element from given tag and length.
+     *  Only reachable from friend classes since construction with
+     *  length different from 0 leads to a state with length being set but
+     *  the element's value still being uninitialized. This can lead to crashes
+     *  when the value is read or written. Thus the method calling this
+     *  constructor with length > 0 must ensure that the element's value is
+     *  explicitly initialized, too.
+     *  Create new element from given tag and length.
+     *  @param tag DICOM tag for the new element
+     *  @param len value length for the new element
+     */
+    DcmOtherByteOtherWord(const DcmTag &tag,
+                          const Uint32 len);
 
     /** method is called after the element value has been loaded.
      *  Can be used to correct the value before it is used for the first time.

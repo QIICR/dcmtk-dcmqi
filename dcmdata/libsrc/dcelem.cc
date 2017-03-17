@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1994-2016, OFFIS e.V.
+ *  Copyright (C) 1994-2017, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -31,6 +31,7 @@
 
 #include "dcmtk/ofstd/ofstd.h"
 #include "dcmtk/ofstd/ofstream.h"
+#include "dcmtk/dcmdata/dcjson.h"
 #include "dcmtk/dcmdata/dcelem.h"
 #include "dcmtk/dcmdata/dcobject.h"
 #include "dcmtk/dcmdata/dcswap.h"
@@ -845,12 +846,18 @@ OFCondition DcmElement::changeValue(const void *value,
             }
         }
     } else {
-        // swap to local byte order
-        swapIfNecessary(gLocalByteOrder, fByteOrder, fValue,
-                        getLengthField(), getTag().getVR().getValueWidth());
-        // copy value at given position
-        memcpy(&fValue[position], OFstatic_cast(const Uint8 *, value), size_t(num));
-        fByteOrder = gLocalByteOrder;
+        // load value (if not loaded yet)
+        if (!fValue)
+            errorFlag = loadValue();
+        if (errorFlag.good())
+        {
+            // swap to local byte order
+            swapIfNecessary(gLocalByteOrder, fByteOrder, fValue,
+                            getLengthField(), getTag().getVR().getValueWidth());
+            // copy value at given position
+            memcpy(&fValue[position], OFstatic_cast(const Uint8 *, value), size_t(num));
+            fByteOrder = gLocalByteOrder;
+        }
     }
     return errorFlag;
 }
@@ -1112,8 +1119,12 @@ OFCondition DcmElement::read(DcmInputStream &inStream,
         /* if this is not an illegal call, go ahead and create a DcmXfer */
         /* object based on the transfer syntax which was passed */
         DcmXfer inXfer(ixfer);
+
         /* determine the transfer syntax's byte ordering */
-        fByteOrder = inXfer.getByteOrder();
+        if (getTag() == DCM_PixelData)
+          fByteOrder = inXfer.getPixelDataByteOrder();
+          else fByteOrder = inXfer.getByteOrder();
+
         /* check if the stream reported an error */
         errorFlag = inStream.status();
         /* if we encountered the end of the stream, set the error flag correspondingly */
@@ -1252,6 +1263,12 @@ OFCondition DcmElement::write(DcmOutputStream &outStream,
         {
             /* create an object that represents the transfer syntax */
             DcmXfer outXfer(oxfer);
+            E_ByteOrder outByteOrder;
+
+            /* determine the transfer syntax's byte ordering for this element */
+            if (getTag() == DCM_PixelData)
+              outByteOrder = outXfer.getPixelDataByteOrder();
+              else outByteOrder = outXfer.getByteOrder();
 
             /* pointer to element value if value resides in memory or old-style
              * write behaviour is active (i.e. everything loaded into memory upon write)
@@ -1270,7 +1287,7 @@ OFCondition DcmElement::write(DcmOutputStream &outStream,
               {
                 /* get this element's value. Mind the byte ordering (little */
                 /* or big endian) of the transfer syntax which shall be used */
-                value = OFstatic_cast(Uint8 *, getValue(outXfer.getByteOrder()));
+                value = OFstatic_cast(Uint8 *, getValue(outByteOrder));
                 if (value) accessPossible = OFTrue;
               }
               else
@@ -1283,7 +1300,7 @@ OFCondition DcmElement::write(DcmOutputStream &outStream,
                 if (!wcache) wcache = &wcache2;
 
                 /* initialize cache object. This is safe even if the object was already initialized */
-                wcache->init(this, getLengthField(), getTransferredBytes(), outXfer.getByteOrder());
+                wcache->init(this, getLengthField(), getTransferredBytes(), outByteOrder);
 
                 /* access first block of element content */
                 errorFlag = wcache->fillBuffer(*this);
@@ -1559,6 +1576,81 @@ OFCondition DcmElement::writeXML(STD_NAMESPACE ostream &out,
         /* write XML end tag  */
         writeXMLEndTag(out, flags);
     }
+    /* always report success */
+    return EC_Normal;
+}
+
+
+// ********************************
+
+
+void DcmElement::writeJsonOpener(STD_NAMESPACE ostream &out,
+                                 DcmJsonFormat &format)
+{
+    DcmVR vr(getTag().getVR());
+    DcmTag tag = getTag();
+    /* increase indention level */
+    /* write attribute tag */
+    out << ++format.indent() << "\""
+        << STD_NAMESPACE hex << STD_NAMESPACE setfill('0')
+        << STD_NAMESPACE setw(4) << tag.getGTag();
+    /* write "ggggeeee" (no comma, upper case!) */
+    /* for private element numbers, zero out 2 first element digits */
+    /* or output full element number "eeee" */
+    out << STD_NAMESPACE setw(4) << STD_NAMESPACE uppercase << tag.getETag() << "\":"
+        << format.space() << "{" << STD_NAMESPACE dec << STD_NAMESPACE setfill(' ');
+    out << STD_NAMESPACE nouppercase;
+    /* increase indention level */
+    /* value representation = VR */
+    out << format.newline() << ++format.indent() << "\"vr\":" << format.space() << "\""
+        << vr.getValidVRName() << "\"";
+}
+
+
+void DcmElement::writeJsonCloser(STD_NAMESPACE ostream &out,
+                                 DcmJsonFormat &format)
+{
+    /* output JSON ending and decrease indention level */
+    out << format.newline() << --format.indent() << "}";
+    --format.indent();
+}
+
+
+OFCondition DcmElement::writeJson(STD_NAMESPACE ostream &out,
+                                  DcmJsonFormat &format)
+{
+    /* always write JSON Opener */
+    writeJsonOpener(out, format);
+    /* write element value (if non-empty) */
+    if (!isEmpty())
+    {
+        OFString value;
+        if (format.asBulkDataURI(getTag(), value))
+        {
+            format.printBulkDataURIPrefix(out);
+            DcmJsonFormat::printString(out, value);
+        }
+        else
+        {
+            OFCondition status = getOFString(value, 0L);
+            if (status.bad())
+                return status;
+            format.printValuePrefix(out);
+            DcmJsonFormat::printNumberDecimal(out, value);
+            const unsigned long vm = getVM();
+            for (unsigned long valNo = 1; valNo < vm; ++valNo)
+            {
+                status = getOFString(value, valNo);
+                if (status.bad())
+                    return status;
+                format.printNextArrayElementPrefix(out);
+                DcmJsonFormat::printNumberDecimal(out, value);
+            }
+            format.printValueSuffix(out);
+        }
+    }
+    /* write JSON Closer  */
+    writeJsonCloser(out, format);
     /* always report success */
     return EC_Normal;
 }

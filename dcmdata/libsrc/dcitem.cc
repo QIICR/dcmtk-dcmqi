@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1994-2016, OFFIS e.V.
+ *  Copyright (C) 1994-2017, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -70,12 +70,12 @@
 #include "dcmtk/dcmdata/dcvrut.h"
 #include "dcmtk/dcmdata/dcxfer.h"
 #include "dcmtk/dcmdata/dcspchrs.h"   /* for class DcmSpecificCharacterSet */
+#include "dcmtk/dcmdata/dcjson.h"
 
 #include "dcmtk/ofstd/ofstream.h"
 #include "dcmtk/ofstd/ofstring.h"
 #include "dcmtk/ofstd/ofcast.h"
 #include "dcmtk/ofstd/ofstd.h"
-
 
 // ********************************
 
@@ -529,6 +529,34 @@ OFCondition DcmItem::writeXML(STD_NAMESPACE ostream &out,
     return l_error;
 }
 
+
+// ********************************
+
+
+OFCondition DcmItem::writeJson(STD_NAMESPACE ostream &out,
+                               DcmJsonFormat &format)
+{
+    if (!elementList->empty())
+    {
+        // write content of all children
+        out << "{" << format.newline();
+        elementList->seek(ELP_first);
+        OFCondition status = EC_Normal;
+        status = elementList->get()->writeJson(out, format);
+        while (status.good() && elementList->seek(ELP_next))
+        {
+            out << "," << format.newline();
+            status = elementList->get()->writeJson(out, format);
+        }
+        out << format.newline() << format.indent() << "}";
+        return status;
+    }
+    else
+    {
+        out << "{}" << format.newline();
+    }
+    return EC_Normal;
+}
 
 // ********************************
 
@@ -1094,6 +1122,7 @@ OFCondition DcmItem::readTagAndLength(DcmInputStream &inStream,
         DCMDATA_WARN("DcmItem: Length of element " << newTag << " is odd");
     }
 
+
     /* if desired, handle private attributes with maximum length as VR SQ */
     if (isPrivate && dcmReadImplPrivAttribMaxLengthAsSQ.get() && (valueLength == DCM_UndefinedLength))
     {
@@ -1158,7 +1187,7 @@ OFCondition DcmItem::readSubElement(DcmInputStream &inStream,
     /* create a new DcmElement* object with corresponding tag and */
     /* length; the object will be accessible through subElem */
     OFBool readAsUN = OFFalse;
-    OFCondition l_error = newDicomElement(subElem, newTag, newLength, &privateCreatorCache, readAsUN);
+    OFCondition l_error = DcmItem::newDicomElement(subElem, newTag, newLength, &privateCreatorCache, readAsUN);
 
     /* if no error occurred and subElem does not equal NULL, go ahead */
     if (l_error.good() && subElem != NULL)
@@ -1195,6 +1224,14 @@ OFCondition DcmItem::readSubElement(DcmInputStream &inStream,
         /* without setting the Mark twice. */
         inStream.putback();
         DCMDATA_WARN("DcmItem: Parse error while parsing element " << newTag);
+    }
+    else if (l_error == EC_UndefinedLengthOBOW)
+    {
+        // do nothing
+    }
+    else if (l_error == EC_VOI_LUT_OBOW)
+    {
+        // do nothing
     }
     else if (l_error != EC_ItemEnd)
     {
@@ -1240,6 +1277,15 @@ OFCondition DcmItem::read(DcmInputStream & inStream,
                           const E_TransferSyntax xfer,
                           const E_GrpLenEncoding glenc,
                           const Uint32 maxReadLength)
+{
+	return DcmItem::readUntilTag(inStream, xfer, glenc, maxReadLength, DCM_UndefinedTagKey);
+}
+
+OFCondition DcmItem::readUntilTag(DcmInputStream & inStream,
+                                  const E_TransferSyntax xfer,
+                                  const E_GrpLenEncoding glenc,
+                                  const Uint32 maxReadLength,
+                                  const DcmTagKey &stopParsingAtElement)
 {
     /* check if this is an illegal call; if so set the error flag and do nothing, else go ahead */
     if (getTransferState() == ERW_notInitialized)
@@ -1317,17 +1363,30 @@ OFCondition DcmItem::read(DcmInputStream & inStream,
                     /* in case of implicit VR, check whether the "default VR" is really appropriate */
                     if (DcmXfer(xfer).isImplicitVR())
                         checkAndUpdateVR(*this, newTag);
-                    /* read the actual data value which belongs to this element */
-                    /* (attribute) and insert this information into the elementList */
-                    errorFlag = readSubElement(inStream, newTag, newValueLength, xfer, glenc, maxReadLength);
-                    /* if reading was successful, we read the entire data value information */
-                    /* for this element; hence lastElementComplete is true again */
-                    if (errorFlag.good())
+
+                    /* check if we want to stop parsing at this point, in the main dataset only */
+                    if( (stopParsingAtElement != DCM_UndefinedTagKey) && (newTag.getXTag()>=stopParsingAtElement) && ident() == EVR_dataset)
+                    {
+                      lastElementComplete = OFTrue;
+                      readStopElem = OFTrue;
+                      DCMDATA_WARN("DcmItem: Element " << newTag.getTagName() << " " << newTag
+                        << " encountered, skipping rest of dataset");
+                    }
+                    else
+                    {
+                      /* read the actual data value which belongs to this element */
+                      /* (attribute) and insert this information into the elementList */
+                      errorFlag = readSubElement(inStream, newTag, newValueLength, xfer, glenc, maxReadLength);
+                      /* if reading was successful, we read the entire data value information */
+                      /* for this element; hence lastElementComplete is true again */
+                      if (errorFlag.good())
                         lastElementComplete = OFTrue;
-                    /* in data or command sets, group 0x0001 to 0x0003, 0x0005, 0x0007 and 0xFFFF are not allowed. */
-                    /* (we cannot check for group 0x0000 since we do not know whether we read a data or command set.)*/
-                    if (!newTag.hasValidGroup() || (newTag.getGroup() == 0x0002))
-                        DCMDATA_WARN("DcmItem: Invalid Element " << newTag << " found in data set");
+
+                      /* in data or command sets, group 0x0001 to 0x0003, 0x0005, 0x0007 and 0xFFFF are not allowed. */
+                      /* (we cannot check for group 0x0000 since we do not know whether we read a data or command set.)*/
+                      if (!newTag.hasValidGroup() || (newTag.getGroup() == 0x0002))
+                          DCMDATA_WARN("DcmItem: Invalid Element " << newTag << " found in data set");
+                    }
                 }
             } else {
                 /* if lastElementComplete is false, we have only read the current element's */
@@ -2160,255 +2219,6 @@ void DcmItem::compactElements(const Uint32 maxLength)
 // ********************************
 
 // Support functions
-
-OFCondition newDicomElement(DcmElement *&newElement,
-                            const DcmTag &tag,
-                            const Uint32 length)
-{
-    DcmTag newTag(tag);
-    OFBool readAsUN = OFFalse;
-    return newDicomElement(newElement, newTag, length, NULL, readAsUN);
-}
-
-DcmElement *newDicomElement(const DcmTag &tag,
-                            const Uint32 length)
-{
-    DcmElement *newElement = NULL;
-    newDicomElement(newElement, tag, length);
-    return newElement;
-}
-
-
-// ********************************
-
-
-OFCondition newDicomElement(DcmElement *&newElement,
-                            DcmTag &tag,
-                            const Uint32 length,
-                            DcmPrivateTagCache *privateCreatorCache,
-                            OFBool& readAsUN)
-{
-    /* initialize variables */
-    OFCondition l_error = EC_Normal;
-    newElement = NULL;
-    DcmEVR evr = tag.getEVR();
-    readAsUN = OFFalse;
-
-    /* revert UN elements with finite length back to known VR if possible */
-    if ((evr == EVR_UN) && (length != DCM_UndefinedLength) && dcmEnableUnknownVRConversion.get())
-    {
-      /* look up VR in data dictionary */
-      DcmTag newTag(tag.getGroup(), tag.getElement());
-
-      /* special handling for private elements */
-      if (privateCreatorCache && (newTag.getGroup() & 1) && (newTag.getElement() >= 0x1000))
-      {
-        const char *pc = privateCreatorCache->findPrivateCreator(newTag);
-        if (pc != NULL)
-        {
-            // we have a private creator for this element
-            newTag.setPrivateCreator(pc);
-            newTag.lookupVRinDictionary();
-        }
-      }
-
-      /* update VR for tag, set "readAsUN" flag that makes sure the element value
-       * is read in Little Endian Implicit VR (i.e. the UN encoding)
-       */
-      if (newTag.getEVR() != EVR_UNKNOWN)
-      {
-          tag.setVR(newTag.getVR());
-          evr = tag.getEVR();
-          readAsUN = OFTrue;
-      }
-    }
-
-    /* depending on the VR of the tag which was passed, create the new object */
-    switch (evr)
-    {
-        // byte strings:
-        case EVR_AE :
-            newElement = new DcmApplicationEntity(tag, length);
-            break;
-        case EVR_AS :
-            newElement = new DcmAgeString(tag, length);
-            break;
-        case EVR_CS :
-            newElement = new DcmCodeString(tag, length);
-            break;
-        case EVR_DA :
-            newElement = new DcmDate(tag, length);
-            break;
-        case EVR_DS :
-            newElement = new DcmDecimalString(tag, length);
-            break;
-        case EVR_DT :
-            newElement = new DcmDateTime(tag, length);
-            break;
-        case EVR_IS :
-            newElement = new DcmIntegerString(tag, length);
-            break;
-        case EVR_TM :
-            newElement = new DcmTime(tag, length);
-            break;
-        case EVR_UI :
-            newElement = new DcmUniqueIdentifier(tag, length);
-            break;
-        case EVR_UR:
-            newElement = new DcmUniversalResourceIdentifierOrLocator(tag, length);
-            break;
-
-        // character strings:
-        case EVR_LO :
-            newElement = new DcmLongString(tag, length);
-            break;
-        case EVR_LT :
-            newElement = new DcmLongText(tag, length);
-            break;
-        case EVR_PN :
-            newElement = new DcmPersonName(tag, length);
-            break;
-        case EVR_SH :
-            newElement = new DcmShortString(tag, length);
-            break;
-        case EVR_ST :
-            newElement = new DcmShortText(tag, length);
-            break;
-        case EVR_UC:
-            newElement = new DcmUnlimitedCharacters(tag, length);
-            break;
-        case EVR_UT:
-            newElement = new DcmUnlimitedText(tag, length);
-            break;
-
-        // dependent on byte order:
-        case EVR_AT :
-            newElement = new DcmAttributeTag(tag, length);
-            break;
-        case EVR_SS :
-            newElement = new DcmSignedShort(tag, length);
-            break;
-        case EVR_xs : // according to DICOM standard
-        case EVR_US :
-            newElement = new DcmUnsignedShort(tag, length);
-            break;
-        case EVR_SL :
-            newElement = new DcmSignedLong(tag, length);
-            break;
-        case EVR_up : // for (0004,eeee) according to DICOM standard
-        case EVR_UL :
-            {
-                // generate tag with VR from dictionary!
-                DcmTag ulupTag(tag.getXTag());
-                if (ulupTag.getEVR() == EVR_up)
-                    newElement = new DcmUnsignedLongOffset(ulupTag, length);
-                else
-                    newElement = new DcmUnsignedLong(tag, length);
-            }
-            break;
-        case EVR_OL :
-            newElement = new DcmOtherLong(tag, length);
-            break;
-        case EVR_FL :
-            newElement = new DcmFloatingPointSingle(tag, length);
-            break;
-        case EVR_FD :
-            newElement = new DcmFloatingPointDouble(tag, length);
-            break;
-        case EVR_OF :
-            newElement = new DcmOtherFloat(tag, length);
-            break;
-        case EVR_OD :
-            newElement = new DcmOtherDouble(tag, length);
-            break;
-
-        // sequences and items:
-        case EVR_SQ :
-            newElement = new DcmSequenceOfItems(tag, length);
-            break;
-        case EVR_na :
-            if (tag.getXTag() == DCM_Item)
-                l_error = EC_InvalidTag;
-            else if (tag.getXTag() == DCM_SequenceDelimitationItem)
-                l_error = EC_SequEnd;
-            else if (tag.getXTag() == DCM_ItemDelimitationItem)
-                l_error = EC_ItemEnd;
-            else
-                l_error = EC_InvalidTag;
-            break;
-
-        // pixel sequences (EVR_pixelSQ) are handled through class DcmPixelData
-        // and should never appear here.
-
-        // unclear 8 or 16 bit:
-        case EVR_ox :
-            if (tag == DCM_PixelData)
-                newElement = new DcmPixelData(tag, length);
-            else if (tag.getBaseTag() == DCM_OverlayData)
-                newElement = new DcmOverlayData(tag, length);
-            else
-                /* we don't know this element's real transfer syntax, so we just
-                 * use the defaults of class DcmOtherByteOtherWord and let the
-                 * application handle it.
-                 */
-                newElement = new DcmOtherByteOtherWord(tag, length);
-            break;
-
-        case EVR_lt :
-            newElement = new DcmOtherByteOtherWord(tag, length);
-            break;
-
-        case EVR_OB :
-        case EVR_OW :
-            if (tag == DCM_PixelData)
-                newElement = new DcmPixelData(tag, length);
-            else if (tag.getBaseTag() == DCM_OverlayData)
-                newElement = new DcmOverlayData(tag, length);
-            else
-                if (length == DCM_UndefinedLength)
-                {
-                    // The attribute is OB or OW but is encoded with undefined
-                    // length.  Assume it is really a sequence so that we can
-                    // catch the sequence delimitation item.
-                    newElement = new DcmSequenceOfItems(tag, length);
-                } else {
-                    newElement = new DcmOtherByteOtherWord(tag, length);
-                }
-            break;
-
-        // read unknown types as byte string:
-        case EVR_UNKNOWN :
-        case EVR_UNKNOWN2B :
-        case EVR_UN :
-        default :
-            if (length == DCM_UndefinedLength)
-            {
-                // The attribute VR is UN with undefined length. Assume it is really
-                // a sequence so that we can catch the sequence delimitation item.
-                DcmTag newTag(tag);
-                newTag.setVR(DcmVR(EVR_SQ)); // on writing we will handle this element as SQ, not UN
-                if (dcmEnableCP246Support.get())
-                {
-                    DCMDATA_WARN("Found element " << newTag << " with VR UN and undefined length, "
-                        << "reading a sequence with transfer syntax LittleEndianImplicit (CP-246)");
-                } else {
-                    DCMDATA_WARN("Found element " << newTag << " with VR UN and undefined length");
-                }
-                newElement = new DcmSequenceOfItems(newTag, length, dcmEnableCP246Support.get());
-            } else {
-                // defined length UN element, treat like OB
-                newElement = new DcmOtherByteOtherWord(tag, length);
-            }
-            break;
-    }
-
-    /* check for valid element pointer */
-    if (l_error.good() && (newElement == NULL))
-        l_error = EC_MemoryExhausted;
-
-    /* return result value */
-    return l_error;
-}
 
 
 OFCondition nextUp(DcmStack &stack)
@@ -4319,9 +4129,8 @@ void DcmItem::updateSpecificCharacterSet(OFCondition &status,
 
 OFCondition DcmItem::convertCharacterSet(const OFString &fromCharset,
                                          const OFString &toCharset,
-                                         const OFBool transliterate,
-                                         const OFBool updateCharset,
-                                         const OFBool discardIllegal)
+                                         const size_t flags,
+                                         const OFBool updateCharset)
 {
     OFCondition status = EC_Normal;
     // if the item is empty, there is nothing to do
@@ -4333,15 +4142,26 @@ OFCondition DcmItem::convertCharacterSet(const OFString &fromCharset,
             << fromCharset << "'" << (fromCharset.empty() ? " (ASCII)" : "") << " to '"
             << toCharset << "'" << (toCharset.empty() ? " (ASCII)" : ""));
         // select source and destination character set
-        status = converter.selectCharacterSet(fromCharset, toCharset, transliterate, discardIllegal);
+        status = converter.selectCharacterSet(fromCharset, toCharset);
         if (status.good())
         {
-            // convert all affected element values in the item
-            status = convertCharacterSet(converter);
-            if (updateCharset)
+            unsigned cflags = 0;
+            /* pass flags to underlying implementation */
+            if (flags & DCMTypes::CF_discardIllegal)
+                cflags |= OFCharacterEncoding::DiscardIllegalSequences;
+            if (flags & DCMTypes::CF_transliterate)
+                cflags |= OFCharacterEncoding::TransliterateIllegalSequences;
+            if (cflags > 0)
+                status = converter.setConversionFlags(cflags);
+            if (status.good())
             {
-                // update the Specific Character Set (0008,0005) element
-                updateSpecificCharacterSet(status, converter);
+                // convert all affected element values in the item
+                status = convertCharacterSet(converter);
+                if (updateCharset)
+                {
+                    // update the Specific Character Set (0008,0005) element
+                    updateSpecificCharacterSet(status, converter);
+                }
             }
         }
     }
@@ -4350,9 +4170,8 @@ OFCondition DcmItem::convertCharacterSet(const OFString &fromCharset,
 
 
 OFCondition DcmItem::convertCharacterSet(const OFString &toCharset,
-                                         const OFBool transliterate,
-                                         const OFBool ignoreCharset,
-                                         const OFBool discardIllegal)
+                                         const size_t flags,
+                                         const OFBool ignoreCharset)
 {
     OFString fromCharset;
     // check whether this item can contain the attribute SpecificCharacterSet (0008,0005)
@@ -4362,7 +4181,7 @@ OFCondition DcmItem::convertCharacterSet(const OFString &toCharset,
         findAndGetOFStringArray(DCM_SpecificCharacterSet, fromCharset, OFFalse /*searchIntoSub*/);
     }
     // do the real work, if Specific Character Set is missing or empty use the default (ASCII)
-    return convertCharacterSet(fromCharset, toCharset, transliterate, !ignoreCharset /*updateCharset*/, discardIllegal);
+    return convertCharacterSet(fromCharset, toCharset, flags, !ignoreCharset /*updateCharset*/);
 }
 
 
@@ -4385,5 +4204,315 @@ OFCondition DcmItem::convertCharacterSet(DcmSpecificCharacterSet &converter)
 OFCondition DcmItem::convertToUTF8()
 {
     // the DICOM defined term "ISO_IR 192" is used for "UTF-8"
-    return convertCharacterSet("ISO_IR 192", OFFalse /*transliterate*/);
+    return convertCharacterSet("ISO_IR 192", 0 /*flags*/);
+}
+
+
+// ********************************
+
+
+DcmElement* DcmItem::newDicomElement(const DcmTagKey& tag,
+                                     const char *privateCreator)
+{
+  DcmTag temp(tag, privateCreator);
+  DcmElement* elem = NULL;
+      OFBool readAsUN = OFFalse;
+      newDicomElement(
+          elem,
+          temp,
+          0,          // Length
+          NULL,       // Private creator
+          readAsUN);  // read as VR UN (result ignored)
+  return elem;
+}
+
+
+OFCondition DcmItem::newDicomElement(DcmElement*& newElement,
+                                     const DcmTagKey& tag,
+                                     const char *privateCreator)
+{
+    DcmTag temp(tag, privateCreator);
+    newElement = NULL;
+    OFBool readAsUN = OFFalse;
+    return newDicomElement(
+        newElement,
+        temp,
+        0,          // Length
+        NULL,       // Private creator
+        readAsUN);  // read as VR UN (result ignored)
+}
+
+
+OFCondition DcmItem::newDicomElement(DcmElement *&newElement,
+                                     DcmTag &tag,
+                                     const Uint32 length,
+                                     DcmPrivateTagCache *privateCreatorCache,
+                                     OFBool& readAsUN)
+{
+    /* initialize variables */
+    OFCondition l_error = EC_Normal;
+    newElement = NULL;
+    DcmEVR evr = tag.getEVR();
+    readAsUN = OFFalse;
+
+    /* revert UN elements with finite length back to known VR if possible */
+    if ((evr == EVR_UN) && (length != DCM_UndefinedLength) && dcmEnableUnknownVRConversion.get())
+    {
+        /* look up VR in data dictionary */
+        DcmTag newTag(tag.getGroup(), tag.getElement());
+
+        /* special handling for private elements */
+        if (privateCreatorCache && (newTag.getGroup() & 1) && (newTag.getElement() >= 0x1000))
+        {
+            const char *pc = privateCreatorCache->findPrivateCreator(newTag);
+            if (pc != NULL)
+            {
+                // we have a private creator for this element
+                newTag.setPrivateCreator(pc);
+                newTag.lookupVRinDictionary();
+            }
+        }
+
+        /* update VR for tag, set "readAsUN" flag that makes sure the element value
+        * is read in Little Endian Implicit VR (i.e. the UN encoding)
+        */
+        if (newTag.getEVR() != EVR_UNKNOWN)
+        {
+            tag.setVR(newTag.getVR());
+            evr = tag.getEVR();
+            readAsUN = OFTrue;
+        }
+    }
+
+    /* depending on the VR of the tag which was passed, create the new object */
+    switch (evr)
+    {
+        // byte strings:
+        case EVR_AE :
+            newElement = new DcmApplicationEntity(tag, length);
+            break;
+        case EVR_AS :
+            newElement = new DcmAgeString(tag, length);
+            break;
+        case EVR_CS :
+            newElement = new DcmCodeString(tag, length);
+            break;
+        case EVR_DA :
+            newElement = new DcmDate(tag, length);
+            break;
+        case EVR_DS :
+            newElement = new DcmDecimalString(tag, length);
+            break;
+        case EVR_DT :
+            newElement = new DcmDateTime(tag, length);
+            break;
+        case EVR_IS :
+            newElement = new DcmIntegerString(tag, length);
+            break;
+        case EVR_TM :
+            newElement = new DcmTime(tag, length);
+            break;
+        case EVR_UI :
+            newElement = new DcmUniqueIdentifier(tag, length);
+            break;
+        case EVR_UR:
+            newElement = new DcmUniversalResourceIdentifierOrLocator(tag, length);
+            break;
+
+        // character strings:
+        case EVR_LO :
+            newElement = new DcmLongString(tag, length);
+            break;
+        case EVR_LT :
+            newElement = new DcmLongText(tag, length);
+            break;
+        case EVR_PN :
+            newElement = new DcmPersonName(tag, length);
+            break;
+        case EVR_SH :
+            newElement = new DcmShortString(tag, length);
+            break;
+        case EVR_ST :
+            newElement = new DcmShortText(tag, length);
+            break;
+        case EVR_UC:
+            newElement = new DcmUnlimitedCharacters(tag, length);
+            break;
+        case EVR_UT:
+            newElement = new DcmUnlimitedText(tag, length);
+            break;
+
+        // dependent on byte order:
+        case EVR_AT :
+            newElement = new DcmAttributeTag(tag, length);
+            break;
+        case EVR_SS :
+            newElement = new DcmSignedShort(tag, length);
+            break;
+        case EVR_xs : // according to DICOM standard
+        case EVR_US :
+            newElement = new DcmUnsignedShort(tag, length);
+            break;
+        case EVR_SL :
+            newElement = new DcmSignedLong(tag, length);
+            break;
+        case EVR_up : // for (0004,eeee) according to DICOM standard
+        case EVR_UL :
+            {
+                // generate tag with VR from dictionary!
+                DcmTag ulupTag(tag.getXTag());
+                if (ulupTag.getEVR() == EVR_up)
+                    newElement = new DcmUnsignedLongOffset(ulupTag, length);
+                else
+                    newElement = new DcmUnsignedLong(tag, length);
+            }
+            break;
+        case EVR_OL :
+            newElement = new DcmOtherLong(tag, length);
+            break;
+        case EVR_FL :
+            newElement = new DcmFloatingPointSingle(tag, length);
+            break;
+        case EVR_FD :
+            newElement = new DcmFloatingPointDouble(tag, length);
+            break;
+        case EVR_OF :
+            newElement = new DcmOtherFloat(tag, length);
+            break;
+        case EVR_OD :
+            newElement = new DcmOtherDouble(tag, length);
+            break;
+
+        // sequences and items:
+        case EVR_SQ :
+            newElement = new DcmSequenceOfItems(tag, length);
+            break;
+        case EVR_na :
+            if (tag.getXTag() == DCM_Item)
+                l_error = EC_InvalidTag;
+            else if (tag.getXTag() == DCM_SequenceDelimitationItem)
+                l_error = EC_SequEnd;
+            else if (tag.getXTag() == DCM_ItemDelimitationItem)
+                l_error = EC_ItemEnd;
+            else
+                l_error = EC_InvalidTag;
+            break;
+
+        // pixel sequences (EVR_pixelSQ) are handled through class DcmPixelData
+        // and should never appear here.
+
+        // unclear 8 or 16 bit:
+        case EVR_ox :
+            if (tag == DCM_PixelData)
+                newElement = new DcmPixelData(tag, length);
+            else if (tag.getBaseTag() == DCM_OverlayData)
+                newElement = new DcmOverlayData(tag, length);
+            else
+                /* we don't know this element's real transfer syntax, so we just
+                 * use the defaults of class DcmOtherByteOtherWord and let the
+                 * application handle it.
+                 */
+                newElement = new DcmOtherByteOtherWord(tag, length);
+            break;
+
+        case EVR_lt :
+            newElement = new DcmOtherByteOtherWord(tag, length);
+            break;
+
+        case EVR_OB :
+        case EVR_OW :
+            if (tag == DCM_PixelData)
+                newElement = new DcmPixelData(tag, length);
+            else if (tag.getBaseTag() == DCM_OverlayData)
+                newElement = new DcmOverlayData(tag, length);
+            else if ((tag == DCM_VOILUTSequence) && (length != DCM_UndefinedLength))
+            {
+                // this is an incorrectly encoded VOI LUT Sequence.
+                // Real-world examples of this issue have been reported in 2016.
+                if (dcmConvertVOILUTSequenceOWtoSQ.get())
+                {
+                  // Silently fix the error by interpreting as a sequence.
+                  DcmTag newTag(tag);
+                  newTag.setVR(DcmVR(EVR_SQ)); // on writing we will handle this element as SQ, not OB/OW
+                  newElement = new DcmSequenceOfItems(newTag, length);
+                } else {
+
+                    if (dcmIgnoreParsingErrors.get())
+                    {
+                        // ignore parse error, keep VR unchanged
+                        DCMDATA_WARN("DcmItem: VOI LUT Sequence with VR=OW and explicit length encountered.");
+                        newElement = new DcmOtherByteOtherWord(tag, length);
+                    }
+                    else
+                    {
+                        // bail out with an error
+                        DCMDATA_ERROR("DcmItem: VOI LUT Sequence with VR=OW and explicit length encountered.");
+                        l_error = EC_VOI_LUT_OBOW;
+                    }
+                }
+            }
+            else
+                if (length == DCM_UndefinedLength)
+                {
+                    // The attribute is OB or OW but is encoded with undefined
+                    // length, and it is not Pixel Data. This is illegal.
+                    if (dcmConvertUndefinedLengthOBOWtoSQ.get())
+                    {
+                        // Assume that this is in fact a sequence so that we can
+                        // catch the sequence delimitation item.
+                        DcmTag newTag(tag);
+                        newTag.setVR(DcmVR(EVR_SQ)); // on writing we will handle this element as SQ, not OB/OW
+                        newElement = new DcmSequenceOfItems(newTag, length);
+                    } else {
+                        if (dcmIgnoreParsingErrors.get())
+                        {
+                            // ignore parse error, keep VR unchanged
+                            OFCondition tempcond = EC_UndefinedLengthOBOW;
+                            DCMDATA_WARN("DcmItem: Parse error in " << tag << ": " << tempcond.text());
+                            newElement = new DcmSequenceOfItems(tag, length);
+                        }
+                        else
+                        {
+                            // bail out with an error
+                            l_error = EC_UndefinedLengthOBOW;
+                            DCMDATA_ERROR("DcmItem: Parse error in " << tag << ": " << l_error.text());
+                        }
+                    }
+                } else {
+                    newElement = new DcmOtherByteOtherWord(tag, length);
+                }
+            break;
+
+        // read unknown types as byte string:
+        case EVR_UNKNOWN :
+        case EVR_UNKNOWN2B :
+        case EVR_UN :
+        default :
+            if (length == DCM_UndefinedLength)
+            {
+                // The attribute VR is UN with undefined length. Assume it is really
+                // a sequence so that we can catch the sequence delimitation item.
+                DcmTag newTag(tag);
+                newTag.setVR(DcmVR(EVR_SQ)); // on writing we will handle this element as SQ, not UN
+                if (dcmEnableCP246Support.get())
+                {
+                    DCMDATA_WARN("Found element " << newTag << " with VR UN and undefined length, "
+                        << "reading a sequence with transfer syntax LittleEndianImplicit (CP-246)");
+                } else {
+                    DCMDATA_WARN("Found element " << newTag << " with VR UN and undefined length");
+                }
+                newElement = new DcmSequenceOfItems(newTag, length, dcmEnableCP246Support.get());
+            } else {
+                // defined length UN element, treat like OB
+                newElement = new DcmOtherByteOtherWord(tag, length);
+            }
+            break;
+    }
+
+    /* check for valid element pointer */
+    if (l_error.good() && (newElement == NULL))
+        l_error = EC_MemoryExhausted;
+
+    /* return result value */
+    return l_error;
 }

@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1994-2016, OFFIS e.V.
+ *  Copyright (C) 1994-2017, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -36,7 +36,7 @@
 #ifdef WITH_ZLIB
 #include <zlib.h>                     /* for zlibVersion() */
 #endif
-#ifdef WITH_LIBICONV
+#ifdef DCMTK_ENABLE_CHARSET_CONVERSION
 #include "dcmtk/ofstd/ofchrenc.h"     /* for OFCharacterEncoding */
 #endif
 
@@ -69,6 +69,7 @@ static int dumpFile(STD_NAMESPACE ostream &out,
                     const OFBool loadIntoMemory,
                     const OFBool stopOnErrors,
                     const OFBool convertToUTF8,
+                    const DcmTagKey &stopParsingAtElement,
                     const char *pixelDirectory);
 
 // ********************************************
@@ -162,6 +163,7 @@ DCMTK_MAIN_FUNCTION
     const char *scanPattern = "";
     const char *pixelDirectory = NULL;
     OFBool convertToUTF8 = OFFalse;
+    DcmTagKey stopParsingBeforeElement = DCM_UndefinedTagKey;
 
 #ifdef HAVE_GUSI_H
     /* needed for Macintosh */
@@ -235,12 +237,23 @@ DCMTK_MAIN_FUNCTION
       cmd.addSubGroup("handling of wrong delimitation items:");
         cmd.addOption("--use-delim-items",     "-rd",    "use delimitation items from dataset (default)");
         cmd.addOption("--replace-wrong-delim", "+rd",    "replace wrong sequence/item delimitation items");
+      cmd.addSubGroup("handling of illegal undefined length OB/OW elements:");
+        cmd.addOption("--illegal-obow-rej",    "-oi",    "reject dataset with illegal element (default)");
+        cmd.addOption("--illegal-obow-conv",   "+oi",    "convert undefined length OB/OW element to SQ");
+      cmd.addSubGroup("handling of VOI LUT Sequence with OW VR and explicit length:");
+        cmd.addOption("--illegal-voi-rej",     "-vi",    "reject dataset with illegal VOI LUT (default)");
+        cmd.addOption("--illegal-voi-conv",    "+vi",    "convert illegal VOI LUT to SQ");
+      cmd.addSubGroup("handling of explicit length pixel data for encaps. transfer syntaxes:");
+        cmd.addOption("--abort-expl-pixdata",  "-pe",    "abort on explicit length pixel data (default)");
+        cmd.addOption("--use-expl-pixdata",    "+pe",    "use explicit length pixel data");
       cmd.addSubGroup("general handling of parser errors: ");
         cmd.addOption("--ignore-parse-errors", "+Ep",    "try to recover from parse errors");
         cmd.addOption("--handle-parse-errors", "-Ep",    "handle parse errors and stop parsing (default)");
       cmd.addSubGroup("other parsing options:");
         cmd.addOption("--stop-after-elem",     "+st", 1, "[t]ag: \"gggg,eeee\" or dictionary name",
                                                          "stop parsing after element specified by t");
+        cmd.addOption("--stop-before-elem",    "+sb", 1, "[t]ag: \"gggg,eeee\" or dictionary name",
+                                                         "stop parsing before element specified by t");
       cmd.addSubGroup("automatic data correction:");
         cmd.addOption("--enable-correction",   "+dc",    "enable automatic data correction (default)");
         cmd.addOption("--disable-correction",  "-dc",    "disable automatic data correction");
@@ -250,7 +263,7 @@ DCMTK_MAIN_FUNCTION
         cmd.addOption("--bitstream-zlib",      "+bz",    "expect deflated zlib bitstream");
 #endif
 
-#ifdef WITH_LIBICONV
+#ifdef DCMTK_ENABLE_CHARSET_CONVERSION
     cmd.addGroup("processing options:");
       cmd.addSubGroup("specific character set:");
         cmd.addOption("--convert-to-utf8",     "+U8",    "convert all element values that are affected\nby Specific Character Set (0008,0005) to UTF-8");
@@ -304,7 +317,7 @@ DCMTK_MAIN_FUNCTION
         {
           app.printHeader(OFTrue /*print host identifier*/);
           COUT << OFendl << "External libraries used:";
-#if !defined(WITH_ZLIB) && !defined(WITH_LIBICONV)
+#if !defined(WITH_ZLIB) && !defined(DCMTK_ENABLE_CHARSET_CONVERSION)
           COUT << " none" << OFendl;
 #else
           COUT << OFendl;
@@ -312,7 +325,7 @@ DCMTK_MAIN_FUNCTION
 #ifdef WITH_ZLIB
           COUT << "- ZLIB, Version " << zlibVersion() << OFendl;
 #endif
-#ifdef WITH_LIBICONV
+#ifdef DCMTK_ENABLE_CHARSET_CONVERSION
           COUT << "- " << OFCharacterEncoding::getLibraryVersionString() << OFendl;
 #endif
           return 0;
@@ -466,6 +479,39 @@ DCMTK_MAIN_FUNCTION
       cmd.endOptionBlock();
 
       cmd.beginOptionBlock();
+      if (cmd.findOption("--illegal-obow-rej"))
+      {
+        dcmConvertUndefinedLengthOBOWtoSQ.set(OFFalse);
+      }
+      if (cmd.findOption("--illegal-obow-conv"))
+      {
+        dcmConvertUndefinedLengthOBOWtoSQ.set(OFTrue);
+      }
+      cmd.endOptionBlock();
+
+      cmd.beginOptionBlock();
+      if (cmd.findOption("--illegal-voi-rej"))
+      {
+        dcmConvertVOILUTSequenceOWtoSQ.set(OFFalse);
+      }
+      if (cmd.findOption("--illegal-voi-conv"))
+      {
+        dcmConvertVOILUTSequenceOWtoSQ.set(OFTrue);
+      }
+      cmd.endOptionBlock();
+
+      cmd.beginOptionBlock();
+      if (cmd.findOption("--abort-expl-pixdata"))
+      {
+        dcmUseExplLengthPixDataForEncTS.set(OFFalse);
+      }
+      if (cmd.findOption("--use-expl-pixdata"))
+      {
+        dcmUseExplLengthPixDataForEncTS.set(OFTrue);
+      }
+      cmd.endOptionBlock();
+
+      cmd.beginOptionBlock();
       if (cmd.findOption("--ignore-parse-errors"))
       {
         dcmIgnoreParsingErrors.set(OFTrue);
@@ -501,7 +547,7 @@ DCMTK_MAIN_FUNCTION
 #endif
 
       /* processing options */
-#ifdef WITH_LIBICONV
+#ifdef DCMTK_ENABLE_CHARSET_CONVERSION
       if (cmd.findOption("--convert-to-utf8")) convertToUTF8 = OFTrue;
 #endif
 
@@ -555,6 +601,7 @@ DCMTK_MAIN_FUNCTION
       if (cmd.findOption("--ignore-errors")) stopOnErrors = OFFalse;
       cmd.endOptionBlock();
 
+      cmd.beginOptionBlock();
       if (cmd.findOption("--stop-after-elem"))
       {
         const char *tagName = NULL;
@@ -565,6 +612,17 @@ DCMTK_MAIN_FUNCTION
         else
           app.printError("no valid key given for option --stop-after-elem");
       }
+      if (cmd.findOption("--stop-before-elem"))
+      {
+        const char *tagName = NULL;
+        app.checkValue(cmd.getValue(tagName));
+        DcmTagKey key = parseTagKey(tagName);
+        if (key != DCM_UndefinedTagKey)
+          stopParsingBeforeElement = key;
+        else
+          app.printError("no valid key given for option --stop-before-elem");
+      }
+      cmd.endOptionBlock();
 
       if (cmd.findOption("--search", 0, OFCommandLine::FOM_FirstFromLeft))
       {
@@ -678,7 +736,7 @@ DCMTK_MAIN_FUNCTION
         /* print header with filename */
         COUT << "# " << OFFIS_CONSOLE_APPLICATION << " (" << fileCounter << "/" << count << "): " << current << OFendl;
       }
-      errorCount += dumpFile(COUT, current, readMode, xfer, printFlags, loadIntoMemory, stopOnErrors, convertToUTF8, pixelDirectory);
+      errorCount += dumpFile(COUT, current, readMode, xfer, printFlags, loadIntoMemory, stopOnErrors, convertToUTF8, stopParsingBeforeElement, pixelDirectory);
     }
 
     return errorCount;
@@ -723,6 +781,7 @@ static int dumpFile(STD_NAMESPACE ostream &out,
                     const OFBool loadIntoMemory,
                     const OFBool stopOnErrors,
                     const OFBool convertToUTF8,
+                    const DcmTagKey &stopParsingAtElement,
                     const char *pixelDirectory)
 {
     int result = 0;
@@ -736,7 +795,17 @@ static int dumpFile(STD_NAMESPACE ostream &out,
     DcmFileFormat dfile;
     DcmObject *dset = &dfile;
     if (readMode == ERM_dataset) dset = dfile.getDataset();
-    OFCondition cond = dfile.loadFile(ifname, xfer, EGL_noChange, OFstatic_cast(Uint32, maxReadLength), readMode);
+    OFCondition cond;
+
+    if (stopParsingAtElement == DCM_UndefinedTagKey)
+    {
+        cond = dfile.loadFile(ifname, xfer, EGL_noChange, OFstatic_cast(Uint32, maxReadLength), readMode);
+    }
+    else
+    {
+        // instead of using loadFile(), we call loadFileUntilTag().
+        cond = dfile.loadFileUntilTag(ifname, xfer, EGL_noChange, OFstatic_cast(Uint32, maxReadLength), readMode, stopParsingAtElement);
+    }
     if (cond.bad())
     {
         OFLOG_ERROR(dcmdumpLogger, OFFIS_CONSOLE_APPLICATION << ": " << cond.text()
@@ -747,7 +816,7 @@ static int dumpFile(STD_NAMESPACE ostream &out,
 
     if (loadIntoMemory) dfile.loadAllDataIntoMemory();
 
-#ifdef WITH_LIBICONV
+#ifdef DCMTK_ENABLE_CHARSET_CONVERSION
     if (convertToUTF8)
     {
         OFLOG_INFO(dcmdumpLogger, "converting all element values that are affected by Specific Character Set (0008,0005) to UTF-8");

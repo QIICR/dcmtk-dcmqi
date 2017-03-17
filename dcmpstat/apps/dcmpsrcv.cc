@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1999-2014, OFFIS e.V.
+ *  Copyright (C) 1999-2017, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -300,7 +300,7 @@ static associationType negotiateAssociation(
         /*  accept any of the storage syntaxes */
         cond = ASC_acceptContextsWithPreferredTransferSyntaxes(
           (*assoc)->params,
-          dcmAllStorageSOPClassUIDs, numberOfAllDcmStorageSOPClassUIDs,
+          dcmAllStorageSOPClassUIDs, numberOfDcmAllStorageSOPClassUIDs,
           (const char**)transferSyntaxes, numTransferSyntaxes);
         errorCond(cond, "Cannot accept presentation contexts:");
       }
@@ -457,6 +457,9 @@ storeProgressCallback(
         {
           OFLOG_ERROR(dcmpsrcvLogger, "Cannot write image file: " << context->fileName);
           rsp->DimseStatus = STATUS_STORE_Refused_OutOfResources;
+
+          // delete incomplete file
+          OFStandard::deleteFile(context->fileName);
         }
       }
       saveImageToDB(context, req, context->fileName, rsp, statusDetail);
@@ -568,7 +571,7 @@ static OFCondition storeSCP(
         if (strcpy(imageFileName, NULL_DEVICE_NAME) != 0)
         {
           OFLOG_INFO(dcmpsrcvLogger, "Store SCP: Deleting Image File: " << imageFileName);
-          unlink(imageFileName);
+          OFStandard::deleteFile(imageFileName);
         }
         if (dbhandle) dbhandle->pruneInvalidRecords();
     }

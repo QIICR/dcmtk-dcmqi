@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1994-2016, OFFIS e.V.
+ *  Copyright (C) 1994-2017, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -39,6 +39,20 @@
  *  @brief global definitions and functions for UID handling
  */
 
+
+/// type of Storage SOP Class
+typedef enum {
+    /// patient objects
+    ESSC_Patient    = 0x01,
+    /// non-patient objects
+    ESSC_NonPatient = 0x02,
+    /// image objects (subset of patient objects)
+    ESSC_Image      = 0x04,
+    /// all types (patient and non-patient objects)
+    ESSC_All        = 0x03
+} E_StorageSOPClassType;
+
+
 /** return the name of a UID.
  *  Performs a table lookup and returns a pointer to a read-only string.
  *  @param uid UID string for which the name is to be looked up
@@ -57,7 +71,7 @@ DCMTK_DCMDATA_EXPORT const char* dcmFindUIDFromName(const char* name);
 /** an array of const strings containing all known Storage SOP Classes
  *  that fit into the conventional PATIENT-STUDY-SERIES-INSTANCE information
  *  model, i.e. everything a Storage SCP might want to store in a PACS.
- *  Special cases such as hanging protocol storage or the Storage SOP Class
+ *  Special cases such as Hanging Protocol or Color Palette Storage SOP Class
  *  are not included in this list.
  *  WARNING: This list contains more than 64 entries, i.e. it is not possible
  *  to use this list to configure the association negotiation behavior of
@@ -67,7 +81,7 @@ DCMTK_DCMDATA_EXPORT const char* dcmFindUIDFromName(const char* name);
 extern DCMTK_DCMDATA_EXPORT const char* dcmAllStorageSOPClassUIDs[];
 
 /// number of entries in dcmAllStorageSOPClassUIDs.
-extern DCMTK_DCMDATA_EXPORT const int numberOfAllDcmStorageSOPClassUIDs;
+extern DCMTK_DCMDATA_EXPORT const int numberOfDcmAllStorageSOPClassUIDs;
 
 /** an array of const strings containing all storage SOP classes that
  *  are proposed by default by those Storage SCU components in DCMTK
@@ -92,17 +106,23 @@ extern DCMTK_DCMDATA_EXPORT const char* dcmShortSCUStorageSOPClassUIDs[];
 extern DCMTK_DCMDATA_EXPORT const int numberOfDcmShortSCUStorageSOPClassUIDs;
 
 /** returns true if the uid is one of the Storage SOP Classes.
- *  Performs a table lookup in the dcmAllStorageSOPClassUIDs table.
+ *  Performs a table lookup in the dcmAllStorageSOPClassUIDs, dcmImageSOPClassUIDs
+ *  and/or other tables depending on the requested type of Storage SOP Class.
+ *  Please note that, by default, this function only covers those Storage SOP
+ *  Classes that fit into the conventional PATIENT-STUDY-SERIES-INSTANCE
+ *  information model, i.e. non-patient DICOM objects are missing. This can
+ *  be changed by setting the optional type parameter to ESSC_NonPatient.
  *  @param uid UID string
+ *  @param type type of Storage SOP Class (default: patient objects only)
  *  @return true if UID is a known Storage SOP Class, false otherwise
  */
-DCMTK_DCMDATA_EXPORT OFBool dcmIsaStorageSOPClassUID(const char* uid);
+DCMTK_DCMDATA_EXPORT OFBool dcmIsaStorageSOPClassUID(const char* uid, const E_StorageSOPClassType type = ESSC_Patient);
 
 /** a global constant array of
  *  string pointers containing the UIDs of all known Image SOP
  *  Classes.  The global variable numberOfDcmImageSOPClassUIDs
  *  defines the size of the array.
- *  NOTE: this list represents a subset of the dcmStorageSOPClassUIDs list
+ *  NOTE: this list represents a subset of the dcmAllStorageSOPClassUIDs list
  */
 extern DCMTK_DCMDATA_EXPORT const char* dcmImageSOPClassUIDs[];
 
@@ -110,7 +130,7 @@ extern DCMTK_DCMDATA_EXPORT const char* dcmImageSOPClassUIDs[];
 extern DCMTK_DCMDATA_EXPORT const int numberOfDcmImageSOPClassUIDs;
 
 /** returns true if the uid is one of the Image Storage SOP Classes.
- *  Performs a table lookup in the dcmImageSOPClassUIDs table.
+ *  This is just a shortcut for dcmIsaStorageSOPClassUID(uid, ESSC_Image).
  *  @param uid UID string
  *  @return true if UID is a known Image Storage SOP Class, false otherwise
  */
@@ -329,9 +349,9 @@ DCMTK_DCMDATA_EXPORT unsigned long dcmGuessModalityBytes(const char *sopClassUID
 #define UID_JPIPReferencedTransferSyntax        "1.2.840.10008.1.2.4.94"
 /// JPIP Referenced Deflate
 #define UID_JPIPReferencedDeflateTransferSyntax "1.2.840.10008.1.2.4.95"
-/// MPEG2 Main Profile @ Main Level
+/// MPEG2 Main Profile @ Main Level (changed with DICOM 2016e to: MPEG2 Main Profile / Main Level)
 #define UID_MPEG2MainProfileAtMainLevelTransferSyntax "1.2.840.10008.1.2.4.100"
-/// MPEG2 Main Profile @ High Level
+/// MPEG2 Main Profile @ High Level (changed with DICOM 2016e to: MPEG2 Main Profile / High Level)
 #define UID_MPEG2MainProfileAtHighLevelTransferSyntax "1.2.840.10008.1.2.4.101"
 /// MPEG-4 AVC/H.264 High Profile / Level 4.1
 #define UID_MPEG4HighProfileLevel4_1TransferSyntax "1.2.840.10008.1.2.4.102"
@@ -362,6 +382,11 @@ DCMTK_DCMDATA_EXPORT unsigned long dcmGuessModalityBytes(const char *sopClassUID
  *  medium. It is never used for network communication or encoding of DICOM objects.
  */
 #define UID_XMLEncodingTransferSyntax "1.2.840.10008.1.2.6.2"
+
+/** Private transfer syntax defined by GE. This transfer syntax is identical to
+ *  Implicit VR Little Endian, except that Pixel Data are encoded in big endian.
+ */
+#define UID_PrivateGE_LEI_WithBigEndianPixelDataTransferSyntax "1.2.840.113619.5.2"
 
 /*
 ** Defined SOP Class UIDs according to DICOM standard

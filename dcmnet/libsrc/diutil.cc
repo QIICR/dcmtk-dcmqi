@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1994-2011, OFFIS e.V.
+ *  Copyright (C) 1994-2017, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were partly developed by
@@ -190,7 +190,7 @@ DU_putStringDOElement(DcmItem *obj, DcmTagKey t, const char *s)
     DcmElement *e = NULL;
     DcmTag tag(t);
 
-    ec = newDicomElement(e, tag);
+    ec = DcmItem::newDicomElement(e, tag);
     if (ec == EC_Normal && s != NULL) {
         ec = e->putString(s);
     }
@@ -224,7 +224,7 @@ DU_putShortDOElement(DcmItem *obj, DcmTagKey t, Uint16 us)
     DcmElement *e = NULL;
     DcmTag tag(t);
 
-    ec = newDicomElement(e, tag);
+    ec = DcmItem::newDicomElement(e, tag);
     if (ec == EC_Normal) {
         ec = e->putUint16(us);
     }
@@ -880,7 +880,7 @@ void DU_logSelectResult(int selectReturnValue)
   }
   else if (selectReturnValue == 0)
   {
-    DCMNET_DEBUG("Timeout while waiting for incoming network data");
+    DCMNET_TRACE("Timeout while waiting for incoming network data");
   }
   else
   {

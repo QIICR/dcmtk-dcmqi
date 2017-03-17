@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 2000-2015, OFFIS e.V.
+ *  Copyright (C) 2000-2017, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -715,8 +715,9 @@ class DCMTK_OFSTD_EXPORT OFStandard
      *  is not affected by a locale setting, the radix character is always
      *  assumed to be '.'
      *  This implementation does not set errno if the input cannot be parsed
-     *  and it does not implement special handling for overflow/underflow
-     *  or NaN values.  However, a return code indicates whether or not
+     *  and it does not implement special handling for overflow/underflow.
+     *  It does handle "NaN" and "Inf" (case insensitive; following
+     *  characters are ignore). A return code indicates whether or not
      *  a successful conversion could be performed.
      *  The precision of this implementation is limited to approx. 9
      *  decimal digits.
@@ -883,6 +884,92 @@ class DCMTK_OFSTD_EXPORT OFStandard
         return OFTrue;
       }
     }
+
+#ifdef DOXYGEN
+    /** checks if a string only contains valid decimal digits, i.e.\ 0-9.
+     *  @tparam Count the number of characters (bytes) to check.
+     *  @param string a pointer to a character array to check.
+     *  @return OFTrue if all characters are valid decimal digits, OFFalse
+     *    if at least one non-digit character is encountered.
+     */
+    template<size_t Count>
+    static OFBool checkDigits(const char* string);
+
+    /** extracts digits from a string and converts them to the given integer
+     *  number type.
+     *  The result is similar to calling atoi, but extractDigits does not
+     *  verify all characters are digits and does not require zero terminated
+     *  strings. It is meant to be used in conjunction with
+     *  OFStandard::checkDigits(). extractDigits does not handle sign
+     *  characters ('+' and '-').
+     *  @tparam T the type of the resulting value, e.g.\ unsigned int. Must
+     *    be a valid integer type, i.e.\ OFnumeric_limits<T>::is_integer must
+     *    be OFTrue.
+     *  @tparam Count the number of digits to extract. Must be greater zero
+     *    and less or equal to OFnumeric_limits<T>::digits10
+     *  @param string a pointer to a character array to extract digits from.
+     *  @return a value of type T that is equivalent to the number represented
+     *    by the digits.
+     *  @details
+     *  @warning The results are unspecified if the given string contains
+     *    non-digit characters.
+     */
+    template<typename T,size_t Count>
+    static T extractDigits(const char*);
+#else
+    template<size_t Count>
+    static OFTypename OFenable_if<!Count,OFBool>::type
+    checkDigits(const char* string)
+    {
+        return OFTrue;
+    }
+
+    template<size_t Count>
+    static OFTypename OFenable_if<!!Count,OFBool>::type
+    checkDigits(const char* string)
+    {
+        return *string >= '0' && *string <= '9' &&
+            checkDigits<Count-1>( string + 1 );
+    }
+
+    template<typename T,size_t Count>
+    static OFTypename OFenable_if
+    <
+        OFnumeric_limits<T>::is_integer && Count == 1,
+        T
+    >::type extractDigits(const char* string)
+    {
+        return *string - '0';
+    }
+
+    template<typename T,size_t Count>
+    static OFTypename OFenable_if
+    <
+        OFnumeric_limits<T>::is_integer && ( Count > 1 ) &&
+             OFnumeric_limits<T>::digits10 >= Count,
+        T
+    >::type extractDigits(const char* string)
+    {
+        return extractDigits<T,Count-1>( string ) * 10
+            + extractDigits<T,1>( string + Count - 1 );
+    }
+#endif
+
+    /** An utility function that finds a substring within a string that does
+     *  not contain leading and trailing spaces and null bytes, effectively
+     *  trimming the string without unnecessary copies.
+     *  @param pBegin a reference to a pointer to the beginning of the string.
+     *  @param pEnd a reference to a pointer to the end of the string (the
+     *    first byte behind the string).
+     *  @details
+     *  @pre pBegin <= pEnd
+     *  @details
+     *  trimString() increments pBegin and decrements pEnd until either both
+     *  point to a non-null and non-space character (the position after it in
+     *  case of pEnd) or both become equal (in case the string only contains
+     *  spaces and null bytes).
+     */
+    static void trimString( const char*& pBegin, const char*& pEnd );
 
     /** Thread-safe version of gethostbyname.
      *  @param name the host name.

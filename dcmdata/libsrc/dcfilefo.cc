@@ -48,6 +48,7 @@
 #include "dcmtk/dcmdata/dcistrma.h"    /* for class DcmInputStream */
 #include "dcmtk/dcmdata/dcistrmf.h"    /* for class DcmInputFileStream */
 #include "dcmtk/dcmdata/dcwcache.h"    /* for class DcmWriteCache */
+#include "dcmtk/dcmdata/dcjson.h"
 
 
 // ********************************
@@ -221,6 +222,55 @@ OFCondition DcmFileFormat::writeXML(STD_NAMESPACE ostream &out,
         }
     }
     return l_error;
+}
+
+
+// ********************************
+
+
+OFCondition DcmFileFormat::writeJson(STD_NAMESPACE ostream &out,
+                                     DcmJsonFormat &format)
+{
+    if (format.printMetaheaderInformation)
+    {
+        if (!itemList->empty())
+        {
+            out << format.indent() << "{" << format.newline();
+            // write content of all children (DcmObject)
+            itemList->seek(ELP_first);
+            OFCondition status = EC_Normal;
+            status = itemList->get()->writeJson(out, format);
+            while (status.good() && itemList->seek(ELP_next))
+            {
+                out << "," << format.newline();
+                status = itemList->get()->writeJson(out, format);
+            }
+            out << format.newline() << format.indent() << "}" << format.newline();
+            return status;
+        }
+        else
+        {
+            return EC_CorruptedData;
+        }
+    }
+    else
+    {
+        if (DcmDataset *dset = getDataset())
+        {
+            out << format.indent() << "{" << format.newline();
+            OFCondition status = EC_Normal;
+            // write content of dataset
+            status = dset->writeJson(out, format);
+            out << format.newline() << format.indent() << "}" << format.newline();
+            return status;
+        }
+        else
+        {
+            out << format.indent() << "{}" << format.newline();
+            return EC_Normal;
+        }
+    }
+    return EC_Normal;
 }
 
 
@@ -643,7 +693,15 @@ OFCondition DcmFileFormat::read(DcmInputStream &inStream,
                                 const E_TransferSyntax xfer,
                                 const E_GrpLenEncoding glenc,
                                 const Uint32 maxReadLength)
+{
+  return DcmFileFormat::readUntilTag(inStream,xfer,glenc,maxReadLength,DCM_UndefinedTagKey);
+}
 
+OFCondition DcmFileFormat::readUntilTag(DcmInputStream &inStream,
+                                        const E_TransferSyntax xfer,
+                                        const E_GrpLenEncoding glenc,
+                                        const Uint32 maxReadLength,
+                                        const DcmTagKey &stopParsingAtElement)
 {
     if (getTransferState() == ERW_notInitialized)
         errorFlag = EC_IllegalCall;
@@ -699,7 +757,7 @@ OFCondition DcmFileFormat::read(DcmInputStream &inStream,
                 {
                     if (dataset && dataset->transferState() != ERW_ready)
                     {
-                        errorFlag = dataset->read(inStream, newxfer, glenc, maxReadLength);
+                        errorFlag = dataset->readUntilTag(inStream, newxfer, glenc, maxReadLength,stopParsingAtElement);
                     }
                 }
             }
@@ -711,7 +769,7 @@ OFCondition DcmFileFormat::read(DcmInputStream &inStream,
             setTransferState(ERW_ready);
     }
     return errorFlag;
-}  // DcmFileFormat::read()
+}  // DcmFileFormat::readUntilTag()
 
 
 // ********************************
@@ -823,15 +881,26 @@ OFCondition DcmFileFormat::write(DcmOutputStream &outStream,
 
 // ********************************
 
-
 OFCondition DcmFileFormat::loadFile(const OFFilename &fileName,
                                     const E_TransferSyntax readXfer,
                                     const E_GrpLenEncoding groupLength,
                                     const Uint32 maxReadLength,
                                     const E_FileReadMode readMode)
 {
+  return DcmFileFormat::loadFileUntilTag(fileName, readXfer, groupLength, maxReadLength, readMode, DCM_UndefinedTagKey);
+}
+
+
+OFCondition DcmFileFormat::loadFileUntilTag(
+                                    const OFFilename &fileName,
+                                    const E_TransferSyntax readXfer,
+                                    const E_GrpLenEncoding groupLength,
+                                    const Uint32 maxReadLength,
+                                    const E_FileReadMode readMode,
+                                    const DcmTagKey &stopParsingAtElement)
+{
     if (readMode == ERM_dataset)
-        return getDataset()->loadFile(fileName, readXfer, groupLength, maxReadLength);
+        return getDataset()->loadFileUntilTag(fileName, readXfer, groupLength, maxReadLength, stopParsingAtElement);
 
     OFCondition l_error = EC_InvalidFilename;
     /* check parameters first */
@@ -852,7 +921,7 @@ OFCondition DcmFileFormat::loadFile(const OFFilename &fileName,
                 FileReadMode = readMode;
                 /* read data from file */
                 transferInit();
-                l_error = read(fileStream, readXfer, groupLength, maxReadLength);
+                l_error = readUntilTag(fileStream, readXfer, groupLength, maxReadLength, stopParsingAtElement);
                 transferEnd();
                 /* restore old value */
                 FileReadMode = oldMode;
@@ -1013,17 +1082,15 @@ DcmDataset *DcmFileFormat::getAndRemoveDataset()
 
 OFCondition DcmFileFormat::convertCharacterSet(const OFString &fromCharset,
                                                const OFString &toCharset,
-                                               const OFBool transliterate,
-                                               const OFBool discardIllegal)
+                                               const size_t flags)
 {
     // convert the dataset associated with this object
-    return getDataset()->convertCharacterSet(fromCharset, toCharset, transliterate, discardIllegal);
+    return getDataset()->convertCharacterSet(fromCharset, toCharset, flags);
 }
 
 
 OFCondition DcmFileFormat::convertCharacterSet(const OFString &toCharset,
-                                               const OFBool transliterate,
-                                               const OFBool discardIllegal)
+                                               const size_t flags)
 {
     OFString sopClass;
     OFBool ignoreCharset = OFFalse;
@@ -1037,7 +1104,7 @@ OFCondition DcmFileFormat::convertCharacterSet(const OFString &toCharset,
         ignoreCharset = OFTrue;
     }
     // usually, we check for Specific Character Set (0008,0005) element in the dataset
-    return getDataset()->convertCharacterSet(toCharset, transliterate, ignoreCharset, discardIllegal);
+    return getDataset()->convertCharacterSet(toCharset, flags, ignoreCharset);
 }
 
 
@@ -1051,5 +1118,5 @@ OFCondition DcmFileFormat::convertCharacterSet(DcmSpecificCharacterSet &converte
 OFCondition DcmFileFormat::convertToUTF8()
 {
     // the DICOM defined term "ISO_IR 192" is used for "UTF-8"
-    return convertCharacterSet("ISO_IR 192", OFFalse /*transliterate*/);
+    return convertCharacterSet("ISO_IR 192", 0 /*flags*/);
 }

@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1994-2016, OFFIS e.V.
+ *  Copyright (C) 1994-2017, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were partly developed by
@@ -290,10 +290,15 @@ ASC_createAssociationParameters(T_ASC_Parameters ** params,
             OFFIS_DTK_IMPLEMENTATION_VERSION_NAME,
             sizeof((*params)->ourImplementationVersionName)-1);
 
-    strcpy((*params)->DULparams.callingImplementationClassUID,
-        (*params)->ourImplementationClassUID);
-    strcpy((*params)->DULparams.callingImplementationVersionName,
-        (*params)->ourImplementationVersionName);
+    if (strlen(OFFIS_DTK_IMPLEMENTATION_VERSION_NAME) > 16)
+    {
+      DCMNET_WARN("DICOM implementation version name too long: " << OFFIS_DTK_IMPLEMENTATION_VERSION_NAME);
+    }
+
+    OFStandard::strlcpy((*params)->DULparams.callingImplementationClassUID,
+        (*params)->ourImplementationClassUID, DICOM_UI_LENGTH + 1);
+    OFStandard::strlcpy((*params)->DULparams.callingImplementationVersionName,
+        (*params)->ourImplementationVersionName, 16+1);
 
     strncpy((*params)->DULparams.applicationContextName,
             UID_StandardApplicationContext,
@@ -1292,7 +1297,7 @@ OFCondition ASC_setIdentRQUserPassword(
     T_ASC_Parameters * params,
     const OFString& userName,
     const OFString& password,
-    const OFBool& requestRsp)
+    const OFBool requestRsp)
 {
   if (params == NULL)
     return ASC_NULLKEY;
@@ -1305,8 +1310,8 @@ OFCondition ASC_setIdentRQUserPassword(
   else
     rq->clear();
   rq->setIdentityType(ASC_USER_IDENTITY_USER_PASSWORD);
-  rq->setPrimField(userName.c_str(), userName.length());
-  rq->setSecField(password.c_str(), password.length());
+  rq->setPrimField(userName.c_str(), OFstatic_cast(Uint16, userName.length()));
+  rq->setSecField(password.c_str(), OFstatic_cast(Uint16, password.length()));
   rq->setReqPosResponse(requestRsp);
   params->DULparams.reqUserIdentNeg = rq;
   return EC_Normal;
@@ -1316,7 +1321,7 @@ OFCondition ASC_setIdentRQUserPassword(
 OFCondition ASC_setIdentRQUserOnly(
     T_ASC_Parameters * params,
     const OFString& userName,
-    const OFBool& requestRsp)
+    const OFBool requestRsp)
 {
   if (params == NULL)
     return ASC_NULLKEY;
@@ -1329,7 +1334,7 @@ OFCondition ASC_setIdentRQUserOnly(
   else
     rq->clear();
   rq->setIdentityType(ASC_USER_IDENTITY_USER);
-  rq->setPrimField(userName.c_str(), userName.length());
+  rq->setPrimField(userName.c_str(), OFstatic_cast(Uint16, userName.length()));
   rq->setReqPosResponse(requestRsp);
   params->DULparams.reqUserIdentNeg = rq;
   return EC_Normal;
@@ -1339,8 +1344,8 @@ OFCondition ASC_setIdentRQUserOnly(
 OFCondition ASC_setIdentRQKerberos(
     T_ASC_Parameters * params,
     const char* kerbTicket,
-    const Uint16& length,
-    const OFBool& requestRsp)
+    const Uint16 length,
+    const OFBool requestRsp)
 {
   if (params == NULL)
     return ASC_NULLKEY;
@@ -1360,8 +1365,8 @@ OFCondition ASC_setIdentRQKerberos(
 OFCondition ASC_setIdentRQSaml(
     T_ASC_Parameters * params,
     const char* saml,
-    const Uint16& length,
-    const OFBool& requestRsp)
+    const Uint16 length,
+    const OFBool requestRsp)
 {
   if (params == NULL)
     return ASC_NULLKEY;
@@ -1533,18 +1538,32 @@ ASC_dumpParameters(OFString& str, T_ASC_Parameters * params, ASC_associateType d
         << "Their Implementation Class UID:    "
         << params->theirImplementationClassUID << OFendl
         << "Their Implementation Version Name: "
-        << params->theirImplementationVersionName << OFendl;
-
-    outstream << "Application Context Name:    "
+        << params->theirImplementationVersionName << OFendl
+        << "Application Context Name:    "
         << params->DULparams.applicationContextName << OFendl
         << "Calling Application Name:    "
         << params->DULparams.callingAPTitle << OFendl
         << "Called Application Name:     "
         << params->DULparams.calledAPTitle << OFendl
-        << "Responding Application Name: "
-        << params->DULparams.respondingAPTitle << OFendl;
+        << "Responding Application Name: ";
 
-    outstream << "Our Max PDU Receive Size:    "
+    // the field "respondingAPTitle" in DULparams exists,
+    // but is never used for network communication because DICOM
+    // requires the responding AE title to be identical to the
+    // called AE title. This rule is enforced on the DUL layer
+    // but not visible here.
+    // To avoid confusion of the user we thus print the called
+    // AE title here (but only if respondingAPTitle is non-empty,
+    // which happens when an incoming association request is
+    // being responded to.
+    if (params->DULparams.respondingAPTitle[0] != '\0')
+    {
+      outstream << params->DULparams.calledAPTitle ;
+    }
+
+    outstream
+        << OFendl
+        << "Our Max PDU Receive Size:    "
         << params->ourMaxPDUReceiveSize << OFendl
         << "Their Max PDU Receive Size:  "
         << params->theirMaxPDUReceiveSize << OFendl;
@@ -1595,8 +1614,9 @@ ASC_dumpParameters(OFString& str, T_ASC_Parameters * params, ASC_associateType d
     }
 
 #if 0
+    // the following output could be useful for debugging purposes
     outstream << "DUL Params --- BEGIN" << OFendl;
-    DUL_DumpParams(&params->DULparams);
+    outstream << DUL_DumpParams(temp_str, &params->DULparams);
     outstream << "DUL Params --- END" << OFendl;
 #endif
 
@@ -1904,10 +1924,10 @@ ASC_requestAssociation(T_ASC_Network * network,
     (*assoc)->sendPDVBuffer = NULL;
 
     params->DULparams.maxPDU = params->ourMaxPDUReceiveSize;
-    strcpy(params->DULparams.callingImplementationClassUID,
-        params->ourImplementationClassUID);
-    strcpy(params->DULparams.callingImplementationVersionName,
-        params->ourImplementationVersionName);
+    OFStandard::strlcpy(params->DULparams.callingImplementationClassUID,
+        params->ourImplementationClassUID, DICOM_UI_LENGTH + 1);
+    OFStandard::strlcpy(params->DULparams.callingImplementationVersionName,
+        params->ourImplementationVersionName, 16+1);
 
     cond = DUL_RequestAssociation(&network->network, block, timeout,
                                   &(*assoc)->params->DULparams,

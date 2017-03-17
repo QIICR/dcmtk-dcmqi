@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 2002-2011, OFFIS e.V.
+ *  Copyright (C) 2002-2017, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -99,6 +99,32 @@ OFBool OFDateTime::operator!=(const OFDateTime &dateTime) const
 {
     /* note that the "overflow" from one day to another is currently not handled */
     return (Date != dateTime.Date) || (Time != dateTime.Time);
+}
+
+
+OFBool OFDateTime::operator<(const OFDateTime &dateTime) const
+{
+    /* note that the "overflow" from one day to another is currently not handled */
+    return (Date < dateTime.Date) || ((Date == dateTime.Date) && (Time < dateTime.Time));
+}
+
+
+OFBool OFDateTime::operator<=(const OFDateTime &dateTime) const
+{
+    /* note that the "overflow" from one day to another is currently not handled */
+    return (Date < dateTime.Date) || ((Date == dateTime.Date) && (Time <= dateTime.Time));
+}
+
+
+OFBool OFDateTime::operator>(const OFDateTime &dateTime) const
+{
+    return (dateTime < *this);
+}
+
+
+OFBool OFDateTime::operator>=(const OFDateTime &dateTime) const
+{
+    return (dateTime <= *this);
 }
 
 

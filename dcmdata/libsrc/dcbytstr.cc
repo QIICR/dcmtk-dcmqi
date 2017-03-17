@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1994-2016, OFFIS e.V.
+ *  Copyright (C) 1994-2017, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -24,6 +24,7 @@
 #include "dcmtk/ofstd/ofstream.h"
 #include "dcmtk/ofstd/ofstring.h"
 #include "dcmtk/ofstd/ofstd.h"
+#include "dcmtk/dcmdata/dcjson.h"
 #include "dcmtk/dcmdata/dcbytstr.h"
 #include "dcmtk/dcmdata/dcvr.h"
 
@@ -80,6 +81,16 @@ OFCondition getStringPart(OFString &result,
 
 
 // ********************************
+
+DcmByteString::DcmByteString(const DcmTag &tag)
+  : DcmElement(tag, 0),
+    paddingChar(' '),
+    maxLength(DCM_UndefinedLength),
+    realLength(0),
+    fStringMode(DCM_UnknownString),
+    nonSignificantChars()
+{
+}
 
 
 DcmByteString::DcmByteString(const DcmTag &tag,
@@ -897,4 +908,39 @@ OFCondition DcmByteString::checkStringValue(const OFString &value,
         }
     }
     return result;
+}
+
+
+// ********************************
+
+
+OFCondition DcmByteString::writeJson(STD_NAMESPACE ostream &out,
+                                     DcmJsonFormat &format)
+{
+    /* always write JSON Opener */
+    DcmElement::writeJsonOpener(out, format);
+    /* write element value (if non-empty) */
+    if (!isEmpty())
+    {
+        OFString value;
+        OFCondition status = getOFString(value, 0L);
+        if (status.bad())
+            return status;
+        format.printValuePrefix(out);
+        DcmJsonFormat::printValueString(out, value);
+        const unsigned long vm = getVM();
+        for (unsigned long valNo = 1; valNo < vm; ++valNo)
+        {
+            status = getOFString(value, valNo);
+            if (status.bad())
+                return status;
+            format.printNextArrayElementPrefix(out);
+            DcmJsonFormat::printValueString(out, value);
+        }
+        format.printValueSuffix(out);
+    }
+    /* write JSON Closer  */
+    DcmElement::writeJsonCloser(out, format);
+    /* always report success */
+    return EC_Normal;
 }
