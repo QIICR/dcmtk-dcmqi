@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1994-2010, OFFIS e.V.
+ *  Copyright (C) 1994-2017, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were partly developed by
@@ -74,6 +74,11 @@
 
 #include "dcmtk/config/osconfig.h"    /* make sure OS specific configuration is included first */
 
+#ifdef HAVE_WINDOWS_H
+// on Windows, we need Winsock2 for network functions
+#include <winsock2.h>
+#endif
+
 #define INCLUDE_CSTDLIB
 #define INCLUDE_CSTDIO
 #define INCLUDE_CSTRING
@@ -113,10 +118,9 @@ DcmTransportConnection *DUL_getTransportConnection(DUL_ASSOCIATIONKEY * callerAs
   else return ((PRIVATE_ASSOCIATIONKEY *)callerAssociation)->connection;
 }
 
-int
-DUL_networkSocket(DUL_NETWORKKEY * callerNet)
+DcmNativeSocketType DUL_networkSocket(DUL_NETWORKKEY * callerNet)
 {
-    if (callerNet == NULL) return -1;
+    if (callerNet == NULL) return DCMNET_INVALID_SOCKET;
     PRIVATE_NETWORKKEY *net = (PRIVATE_NETWORKKEY*)callerNet;
     return net->networkSpecific.TCP.listenSocket;
 }
@@ -125,8 +129,8 @@ OFBool
 DUL_associationWaiting(DUL_NETWORKKEY * callerNet, int timeout)
 {
     PRIVATE_NETWORKKEY *net;
-    int                 s;
-    OFBool             assocWaiting = OFFalse;
+    DcmNativeSocketType s;
+    OFBool              assocWaiting = OFFalse;
     struct timeval      t;
     fd_set              fdset;
     int                 nfound;
@@ -139,19 +143,15 @@ DUL_associationWaiting(DUL_NETWORKKEY * callerNet, int timeout)
     s = net->networkSpecific.TCP.listenSocket;
 
     FD_ZERO(&fdset);
-#ifdef __MINGW32__
-    // on MinGW, FD_SET expects an unsigned first argument
-    FD_SET((unsigned int) s, &fdset);
-#else
     FD_SET(s, &fdset);
-#endif
 
     t.tv_sec = timeout;
     t.tv_usec = 0;
 #ifdef HAVE_INTP_SELECT
-    nfound = select(s + 1, (int *)(&fdset), NULL, NULL, &t);
+    nfound = select(OFstatic_cast(int, s + 1), (int *)(&fdset), NULL, NULL, &t);
 #else
-    nfound = select(s + 1, &fdset, NULL, NULL, &t);
+    // This is safe because on Windows the first select() parameter is ignored anyway
+    nfound = select(OFstatic_cast(int, s + 1), &fdset, NULL, NULL, &t);
 #endif
     if (DCM_dcmnetLogger.isEnabledFor(OFLogger::DEBUG_LOG_LEVEL))
     {

@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1998-2010, OFFIS e.V.
+ *  Copyright (C) 1998-2017, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -22,15 +22,12 @@
 
 #include "dcmtk/config/osconfig.h"    /* make sure OS specific configuration is included first */
 
-#include "dcmtk/dcmnet/dcompat.h"
-
-BEGIN_EXTERN_C
 #ifdef HAVE_WINDOWS_H
-#include <windows.h>
-#include <winbase.h>
+// on Windows, we need Winsock2 for network functions
+#include <winsock2.h>
 #endif
-END_EXTERN_C
 
+#include "dcmtk/dcmnet/dcompat.h"
 #include "dcmtk/dcmpstat/dvpsmsg.h"
 #include "dcmtk/ofstd/ofstring.h"    /* for class OFString */
 #include "dcmtk/ofstd/ofbmanip.h"    /* for OFBitmanipTemplate<> */
@@ -128,12 +125,12 @@ void DVPSIPCMessage::resizePayload(Uint32 i)
 void DVPSIPCMessage::addStringToPayload(const char *str)
 {
   Uint32 length = 0;
-  if (str) length = strlen(str); else str = "";
+  if (str) length = OFstatic_cast(Uint32, strlen(str)); else str = "";
   Uint32 padBytes = 4 - (length % 4);
   resizePayload(sizeof(Uint32)+length+padBytes);
 
   // write string length
-  addIntToPayload(length+padBytes);  
+  addIntToPayload(length+padBytes);
 
   // write string
   strcpy((char *)(payload + payloadUsed), str);
@@ -165,7 +162,7 @@ OFBool DVPSIPCMessage::extractStringFromPayload(OFString& str)
 
   str = (const char *)(payload+payloadReadOffset); // guaranteed to be zero terminated string
   payloadReadOffset += length;
-  return OFTrue;  
+  return OFTrue;
 }
 
 OFBool DVPSIPCMessage::extractIntFromPayload(Uint32& i)
@@ -174,13 +171,13 @@ OFBool DVPSIPCMessage::extractIntFromPayload(Uint32& i)
   if (payloadReadOffset + sizeof(Uint32) > payloadUsed) return OFFalse;
 
   // copy integer into temporary buffer and adjust byte order there
-  unsigned char *temp = new unsigned char[sizeof(Uint32)+8]; // allocate a bit more than needed to be safe  
+  unsigned char *temp = new unsigned char[sizeof(Uint32)+8]; // allocate a bit more than needed to be safe
   OFBitmanipTemplate<unsigned char>::copyMem(payload+payloadReadOffset, temp, sizeof(Uint32));
   swapIfNecessary(gLocalByteOrder, EBO_BigEndian, temp, sizeof(Uint32), sizeof(Uint32));
   payloadReadOffset += sizeof(Uint32);
-  
+
   i = *(Uint32 *)temp;
-  delete[] temp;  
+  delete[] temp;
   return OFTrue;
 }
 
@@ -197,7 +194,7 @@ void DVPSIPCMessage::erasePayload()
 OFBool DVPSIPCMessage::send(DcmTransportConnection &connection)
 {
   // adjust message type and length
-  *(Uint32 *)payload = messageType;  
+  *(Uint32 *)payload = messageType;
   *(Uint32 *)(payload + sizeof(Uint32)) = (payloadUsed - PAYLOAD_OFFSET);
   swapIfNecessary(EBO_BigEndian, gLocalByteOrder, payload, 2*sizeof(Uint32), sizeof(Uint32));
 
@@ -226,9 +223,9 @@ OFBool DVPSIPCMessage::receive(DcmTransportConnection &connection)
   }
 
   // read payload if any
-  if (payloadUsed > 0) 
+  if (payloadUsed > 0)
   {
-    if (connection.read(payload+PAYLOAD_OFFSET, (size_t)payloadUsed) <= 0) 
+    if (connection.read(payload+PAYLOAD_OFFSET, (size_t)payloadUsed) <= 0)
     {
       payloadUsed = PAYLOAD_OFFSET;
       return OFFalse;
@@ -257,16 +254,16 @@ DVPSIPCClient::DVPSIPCClient(Uint32 clientType, const char *txt, int thePort, OF
   if (performTransaction(msg))
   {
     if ((msg.getMessageType() != DVPSIPCMessage::assignApplicationID) || (! msg.extractIntFromPayload(applicationID)))
-    {      
+    {
       // protocol violation
-      serverActive = OFFalse;	
+      serverActive = OFFalse;
     }
   } else {
-    serverActive = OFFalse;	
+    serverActive = OFFalse;
   }
   return;
 }
- 
+
 DVPSIPCClient::~DVPSIPCClient()
 {
   if (connection)
@@ -280,8 +277,13 @@ void DVPSIPCClient::requestConnection()
 {
   if (connection) return; // connection already open
 
+#ifdef _WIN32
+  SOCKET s = socket(AF_INET, SOCK_STREAM, 0);
+  if (s == INVALID_SOCKET) return;
+#else
   int s = socket(AF_INET, SOCK_STREAM, 0);
   if (s < 0) return;
+#endif
 
   OFStandard::OFHostent hp = OFStandard::getHostByName("localhost");
   if (!hp) return;
@@ -294,7 +296,7 @@ void DVPSIPCClient::requestConnection()
   if (connect(s, (struct sockaddr *) & server, sizeof(server)) < 0)
   {
 #ifdef HAVE_WINSOCK_H
-    (void) shutdown(s,  1 /* SD_SEND */); 
+    (void) shutdown(s,  1 /* SD_SEND */);
     (void) closesocket(s);
 #else
     (void) close(s);

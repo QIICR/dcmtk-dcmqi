@@ -9,9 +9,9 @@ SET(DCMTK_CONFIGURATION_DONE true)
 
 # Minimum CMake version required
 CMAKE_MINIMUM_REQUIRED(VERSION 2.6)
-IF(CMAKE_BACKWARDS_COMPATIBILITY GREATER 3.7.2)
-  SET(CMAKE_BACKWARDS_COMPATIBILITY 3.7.2 CACHE STRING "Latest version of CMake when this project was released." FORCE)
-ENDIF(CMAKE_BACKWARDS_COMPATIBILITY GREATER 3.7.2)
+IF(CMAKE_BACKWARDS_COMPATIBILITY GREATER 3.8.0)
+  SET(CMAKE_BACKWARDS_COMPATIBILITY 3.8.0 CACHE STRING "Latest version of CMake when this project was released." FORCE)
+ENDIF(CMAKE_BACKWARDS_COMPATIBILITY GREATER 3.8.0)
 
 # CMAKE_BUILD_TYPE is set to value "Release" if none is specified by the
 # selected build file generator. For those generators that support multiple
@@ -64,7 +64,15 @@ OPTION(BUILD_SHARED_LIBS "Build with shared libraries." OFF)
 OPTION(BUILD_SINGLE_SHARED_LIBRARY "Build a single DCMTK library." OFF)
 MARK_AS_ADVANCED(BUILD_SINGLE_SHARED_LIBRARY)
 SET(CMAKE_DEBUG_POSTFIX "" CACHE STRING "Library postfix for debug builds. Usually left blank.")
-SET(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_CURRENT_SOURCE_DIR}/${DCMTK_CMAKE_INCLUDE}/CMake/")
+# add our CMake modules to the module path, but prefer the ones from CMake.
+LIST(APPEND CMAKE_MODULE_PATH "${CMAKE_ROOT}/Modules" "${CMAKE_CURRENT_SOURCE_DIR}/${DCMTK_CMAKE_INCLUDE}/CMake/")
+# newer CMake versions will warn if a module exists in its and the project's module paths, which is now always
+# the case since above line adds CMake's module path to the project's one. It, therefore, doesn't matter whether
+# we set the policy to OLD or NEW, since in both cases CMake's own module will be preferred. We just set
+# the policy to silence the warning.
+IF(POLICY CMP0017)
+    CMAKE_POLICY(SET CMP0017 NEW)
+ENDIF()
 IF(BUILD_SINGLE_SHARED_LIBRARY)
   # When we are building a single shared lib, we are building shared libs :-)
   SET(BUILD_SHARED_LIBS ON CACHE BOOL "" FORCE)
@@ -124,22 +132,12 @@ ENABLE_TESTING()
 
 IF(CMAKE_CROSSCOMPILING)
   IF(WIN32)
-    INCLUDE(${DCMTK_CMAKE_INCLUDE}CMake/dcmtkUseWine.cmake)
+    INCLUDE("${DCMTK_CMAKE_INCLUDE}CMake/dcmtkUseWine.cmake")
     DCMTK_SETUP_WINE()
   ELSEIF(ANDROID)
-    SET(DCMTK_TRY_COMPILE_REQUIRED_CMAKE_FLAGS "-DANDROID_TOOLCHAIN_CONFIG_FILE:INTERNAL=${ANDROID_TOOLCHAIN_CONFIG_FILE}")
-    INCLUDE(${DCMTK_CMAKE_INCLUDE}CMake/dcmtkUseAndroidSDK.cmake)
-    IF(NOT DCMTK_ANDROID_TOOLCHAIN_VERIFIED)
-      # Ensure the configuration variables for the Android device emulator exist in the cache.
-      DCMTK_SETUP_ANDROID_EMULATOR()
-      SET(DCMTK_ANDROID_TOOLCHAIN_VERIFIED TRUE CACHE INTERNAL "Set to TRUE to prevent aborting configuration on first Android toolchain run")
-      MESSAGE(FATAL_ERROR
-        "Please verify your Android toolchain configuration (e.g.\"ANDROID_NATIVE_API_LEVEL\") is correct before configuring DCMTK.\n"
-        "Hit \"Configure\" again to resume configuration when you are done.\n"
-        "NOTE: set \"DCMTK_ANDROID_TOOLCHAIN_VERIFIED\" to \"TRUE\" to avoid this check (e.g. to allow automated builds), you may use"
-        "something like\n    \"cmake -DDCMTK_ANDROID_TOOLCHAIN_VERIFIED=TRUE ...\"\nto achieve that."
-      )
-    ENDIF()
+    INCLUDE("${DCMTK_CMAKE_INCLUDE}CMake/dcmtkUseAndroidSDK.cmake")
+    # Ensure the configuration variables for the Android device emulator exist in the cache.
+    DCMTK_SETUP_ANDROID_EMULATOR()
   ENDIF()
 ENDIF(CMAKE_CROSSCOMPILING)
 
@@ -147,7 +145,7 @@ ENDIF(CMAKE_CROSSCOMPILING)
 # Generic utilities used for configuring DCMTK
 #-----------------------------------------------------------------------------
 
-INCLUDE(${DCMTK_CMAKE_INCLUDE}CMake/dcmtkMacros.cmake)
+INCLUDE("${DCMTK_CMAKE_INCLUDE}CMake/dcmtkMacros.cmake")
 
 #-----------------------------------------------------------------------------
 # Prepare external dependencies for cross compiling
@@ -159,7 +157,6 @@ IF(CMAKE_CROSSCOMPILING)
   IF(ANDROID)
     UNSET(DCMTK_TRY_RUN_ANDROID_RUNTIME_INSTALLED CACHE)
     DCMTK_ANDROID_START_EMULATOR(DCMTK_ANDROID_EMULATOR_INSTANCE)
-    DCMTK_ATEXIT(DCMTK_ANDROID_STOP_EMULATOR DCMTK_ANDROID_EMULATOR_INSTANCE)
   ENDIF()
 ENDIF(CMAKE_CROSSCOMPILING)
 
@@ -190,12 +187,12 @@ MARK_AS_ADVANCED(DCMTK_INSTALL_BINDIR DCMTK_INSTALL_INCDIR DCMTK_INSTALL_LIBDIR 
 #-----------------------------------------------------------------------------
 # Build directories
 #-----------------------------------------------------------------------------
-SET(DCMTK_BUILD_CMKDIR ${CMAKE_BINARY_DIR})
+SET(DCMTK_BUILD_CMKDIR "${CMAKE_BINARY_DIR}")
 
 #-----------------------------------------------------------------------------
 # Start with clean DCMTKTargets.cmake, filled in GenerateCMakeExports.cmake
 #-----------------------------------------------------------------------------
-FILE(WRITE ${DCMTK_BUILD_CMKDIR}/DCMTKTargets.cmake "")
+FILE(WRITE "${DCMTK_BUILD_CMKDIR}/DCMTKTargets.cmake" "")
 
 #-----------------------------------------------------------------------------
 # Platform-independent settings
@@ -213,7 +210,14 @@ IF(COMMAND CMAKE_POLICY)
 ENDIF(COMMAND CMAKE_POLICY)
 
 # pass optional build date to compiler
-#ADD_DEFINITIONS(-DDCMTK_BUILD_DATE=\\\"YYYY-MM-DD\\\")
+#SET(DCMTK_BUILD_DATE "\\\"YYYY-MM-DD\\\"")
+IF(DCMTK_BUILD_DATE)
+    # Xcode needs one escaping layer more than (as far as we know) everyone else - we gotta go deeper!
+    IF(CMAKE_GENERATOR MATCHES Xcode)
+        STRING(REPLACE "\\" "\\\\" DCMTK_BUILD_DATE "${DCMTK_BUILD_DATE}")
+    ENDIF()
+    ADD_DEFINITIONS(-DDCMTK_BUILD_DATE=${DCMTK_BUILD_DATE})
+ENDIF(DCMTK_BUILD_DATE)
 
 # make OFString(NULL) safe by default
 ADD_DEFINITIONS(-DUSE_NULL_SAFE_OFSTRING)
@@ -370,7 +374,7 @@ ENDIF(WIN32)
 
 # define libraries and object files that must be linked to most Windows applications
 IF(WIN32)
-  SET(WIN32_STD_LIBRARIES ws2_32 netapi32 wsock32)
+  SET(WIN32_STD_LIBRARIES iphlpapi ws2_32 netapi32 wsock32)
   IF(NOT DEFINED MINGW)
     # additional object file needed for wildcard expansion; for wchar_t* support, use 'wsetargv'
     SET(WIN32_STD_OBJECTS setargv)

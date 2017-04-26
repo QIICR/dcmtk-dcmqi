@@ -453,7 +453,7 @@ void WlmFileSystemInteractionManager::DetermineWorklistFiles( OFVector<OFString>
   int ret = 0;
 
   // start a loop; in each iteration another directory entry is determined
-  long hFile = _findfirst( (char*)searchname.c_str(), &fileData );
+  long hFile = OFstatic_cast(long, _findfirst( (char*)searchname.c_str(), &fileData ));
   while( hFile != -1L && ret == 0 )
   {
     // if the current entry refers to a worklist file, do something
@@ -478,14 +478,14 @@ void WlmFileSystemInteractionManager::DetermineWorklistFiles( OFVector<OFString>
   if( dirp != NULL )
   {
     // start a loop; in each iteration another directory entry is determined.
-#if defined(_REENTRANT) && !defined(_WIN32) && !defined(__CYGWIN__)
+#ifdef HAVE_READDIR_R
     unsigned char entryBuffer[sizeof(struct dirent) + _POSIX_PATH_MAX + 1];
 #ifdef HAVE_OLD_READDIR_R
     for( dp = readdir_r( dirp, (struct dirent *)entryBuffer ) ; dp != NULL ; dp = readdir_r( dirp, (struct dirent *)entryBuffer ) )
 #else
     for( int readResult = readdir_r( dirp, (struct dirent *)entryBuffer, &dp ) ; readResult == 0 && dp ; readResult = readdir_r( dirp, (struct dirent *)entryBuffer, &dp ) )
 #endif
-#else
+#else // HAVE_READDIR_R
     for( dp = readdir( dirp ) ; dp != NULL ; dp = readdir( dirp ) )
 #endif
     {
@@ -710,13 +710,17 @@ OFBool WlmFileSystemInteractionManager::ReferencedStudyOrPatientSequenceIsAbsent
 // ----------------------------------------------------------------------------
 
 OFBool WlmFileSystemInteractionManager::DescriptionAndCodeSequenceAttributesAreIncomplete( DcmTagKey descriptionTagKey, DcmTagKey codeSequenceTagKey, DcmItem *dset )
-// Date         : May 4, 2005
-// Author       : Thomas Wilkens
-// Task         : This function checks if the specified description and code sequence attribute are both incomplete in the given dataset.
+// Date         : April 18, 2017
+// Author       : Michael Onken
+// Task         : This method ensures that either code or description is set to a non-empty value,
+//                and at the same time none of the attributes is present with a zero-length value.
+//                If one of these requirements are not met, then OFTrue is returned, otherwise OFFalse.
 // Parameters   : descriptionTagKey  - [in] The description attribute which shall be checked.
 //                codeSequenceTagKey - [in] The codeSequence attribute which shall be checked.
 //                dset               - [in] The dataset in which the attributes are contained.
-// Return Value : OFTrue in case both attributes are incomplete, OFFalse otherwise.
+// Return Value : OFFalse (i.e. no error regarding the standard) in case at least
+//                one of both attributes has a non-empty, valid value, and none
+//                is set to an empty value. OFTrue otherwise.
 {
   DcmElement *codeSequence = NULL;
 
@@ -724,30 +728,48 @@ OFBool WlmFileSystemInteractionManager::DescriptionAndCodeSequenceAttributesAreI
   // i.e. if complete information can be retrieved from this attribute
 
   // if the attribute is not existent or has no items, we consider it incomplete
-  OFBool codeSequenceComplete = OFTrue;
-  if( dset->findAndGetElement( codeSequenceTagKey, codeSequence ).bad() || ((DcmSequenceOfItems*)codeSequence)->card() == 0 )
+  DcmSequenceOfItems* seq = NULL;
+  if (dset->findAndGetSequence( codeSequenceTagKey, seq ).good())
   {
-    DCMWLM_DEBUG("- " << DcmTag(codeSequenceTagKey).getTagName() << " " << codeSequenceTagKey << " is missing or empty");
-    codeSequenceComplete = OFFalse;
-  }
-  else
-  {
-    // if it is existent and has items, check every item for completeness
-    for( unsigned long i=0 ; i<((DcmSequenceOfItems*)codeSequence)->card() && codeSequenceComplete;i++ )
+    if (seq->card() == 0)
     {
-      if( AttributeIsAbsentOrEmpty( DCM_CodeValue, ((DcmSequenceOfItems*)codeSequence)->getItem(i) ) ||
-          AttributeIsAbsentOrEmpty( DCM_CodingSchemeDesignator, ((DcmSequenceOfItems*)codeSequence)->getItem(i) ) )
-        codeSequenceComplete = OFFalse;
+      DCMWLM_DEBUG("- " << DcmTag(codeSequenceTagKey).getTagName() << " " << codeSequenceTagKey << " is empty");
+      return OFTrue;
     }
-    if( !codeSequenceComplete )
-      DCMWLM_DEBUG("- " << DcmTag(codeSequenceTagKey).getTagName() << " " << codeSequenceTagKey << " is incomplete");
+    else if (seq->card() > 0)
+    {
+      // if it is existent and has items, check every item for completeness
+      for( unsigned long i=0; i< seq->card(); i++ )
+      {
+        if( AttributeIsAbsentOrEmpty( DCM_CodeValue, seq->getItem(i) ) ||
+            AttributeIsAbsentOrEmpty( DCM_CodingSchemeDesignator, seq->getItem(i) ) )
+        {
+          DCMWLM_DEBUG("- " << DcmTag(codeSequenceTagKey).getTagName() << " " << codeSequenceTagKey << " has incomplete or empty code entries");
+          return OFTrue;
+        }
+      }
+    }
+  }
+  // check whether description is valid. If sequence does exists, the attribute
+  // must exist with a valid value.
+  OFString description;
+  if (dset->findAndGetOFStringArray(descriptionTagKey, description).bad())
+  {
+    if (!seq)
+    {
+      DCMWLM_DEBUG("- " << DcmTag(codeSequenceTagKey).getTagName() << " " << codeSequenceTagKey
+        << " and " << DcmTag(descriptionTagKey) << " " << descriptionTagKey << " are both not set");
+      return OFTrue;
+    }
+  }
+  // in any case, description must not exist with empty value in the dataset
+  else if (description.empty())
+  {
+    DCMWLM_DEBUG("- " << DcmTag(descriptionTagKey).getTagName() << " " << descriptionTagKey << " is empty");
+    return OFTrue;
   }
 
-  // now check the above condition
-  if( !codeSequenceComplete && AttributeIsAbsentOrEmpty( descriptionTagKey, dset ) )
-    return( OFTrue );
-  else
-    return( OFFalse );
+  return OFFalse;
 }
 
 // ----------------------------------------------------------------------------
@@ -2088,7 +2110,7 @@ void WlmFileSystemInteractionManager::ExtractValuesFromRange( const char *range,
 {
   // get lower value
   const char *tmp = strchr( range, '-' );
-  int res = tmp - range;
+  const size_t res = tmp - range;
   if( res == 0 )
     lower = NULL;
   else
@@ -2099,13 +2121,13 @@ void WlmFileSystemInteractionManager::ExtractValuesFromRange( const char *range,
   }
 
   // get upper value
-  int len = strlen( range );
+  const size_t len = strlen( range );
   if( res == len - 1 )
     upper = NULL;
   else
   {
     upper = new char[ len - 1 - res + 1 ];
     strncpy( upper, tmp + 1, len - 1 - res );
-    upper[len-1-res] = '\0';
+    upper[len - 1 - res] = '\0';
   }
 }

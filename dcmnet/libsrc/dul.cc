@@ -71,6 +71,11 @@
 
 
 #include "dcmtk/config/osconfig.h"    /* make sure OS specific configuration is included first */
+
+#ifdef HAVE_WINDOWS_H
+#include <winsock2.h>  /* for SO_EXCLUSIVEADDRUSE */
+#endif
+
 #include "dcmtk/dcmnet/diutil.h"
 
 #define INCLUDE_CSTDLIB
@@ -149,7 +154,7 @@ END_EXTERN_C
 OFGlobal<OFBool> dcmDisableGethostbyaddr(OFFalse);
 OFGlobal<OFBool> dcmStrictRoleSelection(OFFalse);
 OFGlobal<Sint32> dcmConnectionTimeout(-1);
-OFGlobal<int>    dcmExternalSocketHandle(-1);
+OFGlobal<DcmNativeSocketType> dcmExternalSocketHandle(DCMNET_INVALID_SOCKET);
 OFGlobal<const char *> dcmTCPWrapperDaemonName((const char *)NULL);
 OFGlobal<unsigned long> dcmEnableBackwardCompatibility(0);
 
@@ -186,7 +191,13 @@ static OFCondition
 get_association_parameter(void *paramAddress,
   DUL_DATA_TYPE paramType, size_t paramLength,
   DUL_DATA_TYPE outputType, void *outputAddress, size_t outputLength);
+
+#ifdef _WIN32
+static void setTCPBufferLength(SOCKET sock);
+#else
 static void setTCPBufferLength(int sock);
+#endif
+
 static OFCondition checkNetwork(PRIVATE_NETWORKKEY ** networkKey);
 static OFCondition checkAssociation(PRIVATE_ASSOCIATIONKEY ** association);
 static OFString dump_presentation_ctx(LST_HEAD ** l);
@@ -214,6 +225,44 @@ void DUL_markProcessAsForkedChild()
 {
   processIsForkedChild = OFTrue;
 }
+
+OFCondition DUL_readSocketHandleAsForkedChild()
+{
+  OFCondition result = EC_Normal;
+
+#ifdef _WIN32
+  // we are a child process
+  DUL_markProcessAsForkedChild();
+
+  char buf[256];
+  DWORD bytesRead = 0;
+  HANDLE hStdIn = GetStdHandle(STD_INPUT_HANDLE);
+
+  // read socket handle number from stdin, i.e. the anonymous pipe
+  // to which our parent process has written the handle number.
+  if (ReadFile(hStdIn, buf, sizeof(buf) - 1, &bytesRead, NULL))
+  {
+    // make sure buffer is zero terminated
+    buf[bytesRead] = '\0';
+    unsigned __int64 socketHandle = 0;
+    sscanf(buf, "%llu", &socketHandle);
+    // socketHandle is always 64-bit because we always use this type to
+    // pass the handle between parent and chile. Type DcmNativeSocketType
+    // can be 32-bit on a 32-bit Windows, however. We, therefore, cast to the
+    // appropriate type. This is safe because the handle in the parent
+    // also had type DcmNativeSocketType.
+    dcmExternalSocketHandle.set(OFstatic_cast(DcmNativeSocketType, socketHandle));
+  }
+  else
+  {
+    DCMNET_ERROR("cannot read socket handle: " << GetLastError());
+    result = DUL_CANNOTREADSOCKETHANDLE;
+  }
+#endif
+
+  return result;
+}
+
 
 void DUL_requestForkOnTransportConnectionReceipt(int argc, char *argv[])
 {
@@ -1002,6 +1051,7 @@ DUL_AbortAssociation(DUL_ASSOCIATIONKEY ** callerAssociation)
     DUL_ABORTITEMS abortItems = { 0, DUL_SCU_INITIATED_ABORT, 0 };
     int event = 0;
     unsigned char pduType = 0;
+    OFCondition tcpError = makeDcmnetCondition(DULC_TCPIOERROR, OF_error, "");
 
     PRIVATE_ASSOCIATIONKEY ** association = (PRIVATE_ASSOCIATIONKEY **) callerAssociation;
     OFCondition cond = checkAssociation(association);
@@ -1056,7 +1106,9 @@ DUL_AbortAssociation(DUL_ASSOCIATIONKEY ** callerAssociation)
           else event = INVALID_PDU;
           cond = PRV_StateMachine(NULL, association, event, (*association)->protocolState, NULL);
         }
-        if (cond.good()) done = OFTrue;
+        // the comparison with tcpError prevents a potential infinite loop if
+        // we are receiving garbage over the network connection.
+        if (cond.good() || (cond == tcpError)) done = OFTrue;
     }
     return EC_Normal;
 }
@@ -1499,8 +1551,13 @@ receiveTransportConnectionTCP(PRIVATE_NETWORKKEY ** network,
 
     int reuse = 1;
 
+#ifdef _WIN32
+    SOCKET sock = dcmExternalSocketHandle.get();
+    if (sock != INVALID_SOCKET)
+#else
     int sock = dcmExternalSocketHandle.get();
     if (sock > 0)
+#endif
     {
       // use the socket file descriptor provided to us externally
       // instead of calling accept().
@@ -1533,11 +1590,15 @@ receiveTransportConnectionTCP(PRIVATE_NETWORKKEY ** network,
             timeout_val.tv_sec = timeout;
             timeout_val.tv_usec = 0;
 #ifdef HAVE_INTP_SELECT
-            nfound = select((*network)->networkSpecific.TCP.listenSocket + 1,
-                            (int *)(&fdset), NULL, NULL, &timeout_val);
+            nfound = select(
+              OFstatic_cast(int, (*network)->networkSpecific.TCP.listenSocket + 1),
+                           (int *)(&fdset), NULL, NULL, &timeout_val);
 #else
-            nfound = select((*network)->networkSpecific.TCP.listenSocket + 1,
-                            &fdset, NULL, NULL, &timeout_val);
+            // On Win32, it is safe to cast the first parameter to int
+            // because Windows ignores this parameter anyway.
+            nfound = select(
+              OFstatic_cast(int, (*network)->networkSpecific.TCP.listenSocket + 1),
+                           &fdset, NULL, NULL, &timeout_val);
 #endif
             if (DCM_dcmnetLogger.isEnabledFor(OFLogger::DEBUG_LOG_LEVEL))
             {
@@ -1564,10 +1625,14 @@ receiveTransportConnectionTCP(PRIVATE_NETWORKKEY ** network,
                 timeout_val.tv_sec = 5;
                 timeout_val.tv_usec = 0;
 #ifdef HAVE_INTP_SELECT
-                nfound = select((*network)->networkSpecific.TCP.listenSocket + 1,
+                nfound = select(
+                  OFstatic_cast(int, (*network)->networkSpecific.TCP.listenSocket + 1),
                                 (int *)(&fdset), NULL, NULL, &timeout_val);
 #else
-                nfound = select((*network)->networkSpecific.TCP.listenSocket + 1,
+                // On Win32, it is safe to cast the first parameter to int
+                // because Windows ignores this parameter anyway.
+                nfound = select(
+                  OFstatic_cast(int, (*network)->networkSpecific.TCP.listenSocket + 1),
                                 &fdset, NULL, NULL, &timeout_val);
 #endif
                 if (DCM_dcmnetLogger.isEnabledFor(OFLogger::DEBUG_LOG_LEVEL))
@@ -1586,9 +1651,13 @@ receiveTransportConnectionTCP(PRIVATE_NETWORKKEY ** network,
         do
         {
             sock = accept((*network)->networkSpecific.TCP.listenSocket, &from, &len);
+#ifdef _WIN32
+        } while (sock == INVALID_SOCKET && WSAGetLastError() == WSAEINTR);
+        if (sock == INVALID_SOCKET)
+#else
         } while (sock == -1 && errno == EINTR);
-
         if (sock < 0)
+#endif
         {
             char buf[256];
             OFOStringStream stream;
@@ -1655,6 +1724,17 @@ receiveTransportConnectionTCP(PRIVATE_NETWORKKEY ** network,
              */
             cmdLine += " \"";
             cmdLine += command_argv[i];
+            /* if last character in argument value is a backslash, escape it
+             * since otherwise it would escape the quote appended in the following
+             * step, i.e. make sure that something like '\my\dir\' does not become
+             * '"\my\dir\"' but instead ends up as '"\my\dir\\"' (single quotes for
+             *  demonstration purposes). Make sure nobody passes a zero length string.
+             */
+            size_t len = strlen(command_argv[i]);
+            if ((len > 0) && (command_argv[i][len - 1] == '\\'))
+            {
+	            cmdLine += "\\";
+            }
             cmdLine += "\"";
         }
 
@@ -1740,9 +1820,10 @@ receiveTransportConnectionTCP(PRIVATE_NETWORKKEY ** network,
 
                 // send number of socket handle in child process over anonymous pipe
                 DWORD bytesWritten;
-                char buf[20];
-                sprintf(buf, "%i", OFstatic_cast(int, OFreinterpret_cast(size_t, childSocketHandle)));
-                if (!WriteFile(hChildStdInWriteDup, buf, strlen(buf) + 1, &bytesWritten, NULL))
+                char buf[30];
+                // we pass the socket handle as a 64-bit unsigned integer, which should work for 32 and 64 bit Windows
+                sprintf(buf, "%llu", OFreinterpret_cast(unsigned __int64, childSocketHandle));
+                if (!WriteFile(hChildStdInWriteDup, buf, OFstatic_cast(DWORD, strlen(buf) + 1), &bytesWritten, NULL))
                 {
                     CloseHandle(hChildStdInWriteDup);
                     return makeDcmnetCondition(DULC_CANNOTFORK, OF_error, "Multi-Process Error: Writing to anonymous pipe failed");
@@ -1781,7 +1862,12 @@ receiveTransportConnectionTCP(PRIVATE_NETWORKKEY ** network,
         return makeDcmnetCondition(DULC_TCPINITERROR, OF_error, msg.c_str());
     }
     reuse = 1;
+
+#ifdef _WIN32
+    if (setsockopt(sock, SOL_SOCKET, SO_EXCLUSIVEADDRUSE, (char *) &reuse, sizeof(reuse)) < 0)
+#else
     if (setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, (char *) &reuse, sizeof(reuse)) < 0)
+#endif
     {
         char buf[256];
         OFString msg = "TCP Initialization Error: ";
@@ -2026,13 +2112,21 @@ initializeNetworkTCP(PRIVATE_NETWORKKEY ** key, void *parameter)
     (*key)->networkSpecific.TCP.tLayer = NULL;
     (*key)->networkSpecific.TCP.tLayerOwned = 0;
     (*key)->networkSpecific.TCP.port = -1;
+#ifdef _WIN32
+    (*key)->networkSpecific.TCP.listenSocket = INVALID_SOCKET;
+#else
     (*key)->networkSpecific.TCP.listenSocket = -1;
+#endif
 
     // Create listen socket if we're an application acceptor,
     // unless the socket handle has already been passed to us or
     // we are a forked child of an application acceptor, in which
     // case the socket also already exists.
+#ifdef _WIN32
+    if ((dcmExternalSocketHandle.get() == INVALID_SOCKET) &&
+#else
     if ((dcmExternalSocketHandle.get() < 0) &&
+#endif
         ((*key)->applicationFunction & DICOM_APPLICATION_ACCEPTOR) &&
         (! processIsForkedChild))
     {
@@ -2044,14 +2138,24 @@ initializeNetworkTCP(PRIVATE_NETWORKKEY ** key, void *parameter)
 #else
       size_t length;
 #endif
+
+#ifdef _WIN32
+      SOCKET sock;
+#else
       int sock;
+#endif
       struct sockaddr_in server;
 
       /* Create socket for Internet type communication */
       (*key)->networkSpecific.TCP.port = *(int *) parameter;
       (*key)->networkSpecific.TCP.listenSocket = socket(AF_INET, SOCK_STREAM, 0);
       sock = (*key)->networkSpecific.TCP.listenSocket;
+
+#ifdef _WIN32
+      if (sock == INVALID_SOCKET)
+#else
       if (sock < 0)
+#endif
       {
         char buf[256];
         OFString msg = "TCP Initialization Error: ";
@@ -2062,7 +2166,11 @@ initializeNetworkTCP(PRIVATE_NETWORKKEY ** key, void *parameter)
 #ifdef HAVE_GUSI_H
       /* GUSI always returns an error for setsockopt(...) */
 #else
+#ifdef _WIN32
+      if (setsockopt(sock, SOL_SOCKET, SO_EXCLUSIVEADDRUSE, (char *) &reuse, sizeof(reuse)) < 0)
+#else
       if (setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, (char *) &reuse, sizeof(reuse)) < 0)
+#endif
       {
         char buf[256];
         OFString msg = "TCP Initialization Error: ";
@@ -2281,8 +2389,11 @@ get_association_parameter(void *paramAddress,
 ** Algorithm:
 **      Description of the algorithm (optional) and any other notes.
 */
-static void
-setTCPBufferLength(int sock)
+#ifdef _WIN32
+static void setTCPBufferLength(SOCKET sock)
+#else
+static void setTCPBufferLength(int sock)
+#endif
 {
     char *TCPBufferLength;
     int bufLen;

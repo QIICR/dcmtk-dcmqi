@@ -31,6 +31,7 @@
 #include "dcmtk/ofstd/oftraits.h"   /* for OFenable_if, ... */
 #include "dcmtk/ofstd/ofcond.h"     /* for OFCondition */
 #include "dcmtk/ofstd/oflimits.h"   /* for OFnumeric_limits<T>::max() */
+#include "dcmtk/ofstd/oferror.h"
 
 #define INCLUDE_CASSERT
 #define INCLUDE_CSTDLIB
@@ -919,7 +920,7 @@ class DCMTK_OFSTD_EXPORT OFStandard
 #else
     template<size_t Count>
     static OFTypename OFenable_if<!Count,OFBool>::type
-    checkDigits(const char* string)
+    checkDigits(const char* /*string*/)
     {
         return OFTrue;
     }
@@ -1026,6 +1027,41 @@ class DCMTK_OFSTD_EXPORT OFStandard
      *  @return the host name as an OFString value.
      */
     static OFString getHostName();
+
+    /** Initialize the network API (if necessary), e.g.\ Winsock or GUSI.
+     *  Calls the appropriate network initialization routines for the current
+     *  platform, e.g.\ WSAStartup() or GUSISetup().
+     *  @note This function must be called by an application before any
+     *    network related functions are used, be it listening on a socket or
+     *    just retrieving the current host name. Not all platforms require
+     *    calling a network initialization routine, therefore testing if it
+     *    works to determine if this method must be called is not an option
+     *    -- just always ensure to call it at program startup if the
+     *    application does something network related!
+     */
+    static void initializeNetwork();
+
+    /** Shutdown the network API (if necessary), e.g.\ Winsock.
+     *  Calls the appropriate network shutdown routines to free used resources
+     *  (e.g.\ WSACleanup()).
+     */
+    static void shutdownNetwork();
+
+    /** Retrieve the last operating system error code that was emitted in the
+     *  calling thread.
+     *  The current implementation uses errno on POSIX-like platforms and
+     *  GetLastError() on Windows.
+     *  @return the last error code as OFerror_code object.
+     */
+    static OFerror_code getLastSystemErrorCode();
+
+    /** Retrieve the last network specific error code that was emitted in the
+     *  calling thread.
+     *  The current implementation uses errno on POSIX-like platforms and
+     *  WSAGetLastError() on Windows.
+     *  @return the last error code as OFerror_code object.
+     */
+    static OFerror_code getLastNetworkErrorCode();
 
  private:
 

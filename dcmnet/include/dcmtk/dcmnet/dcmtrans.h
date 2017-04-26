@@ -24,6 +24,7 @@
 #define DCMTRANS_H
 
 #include "dcmtk/config/osconfig.h"    /* make sure OS specific configuration is included first */
+
 #include "dcmtk/ofstd/ofglobal.h"     /* for OFGlobal */
 #include "dcmtk/ofstd/oftypes.h"      /* for OFBool */
 #include "dcmtk/ofstd/ofstream.h"     /* for ostream */
@@ -65,7 +66,7 @@ public:
    *    the connection must already be established on socket level. This object
    *    takes over control of the socket.
    */
-  DcmTransportConnection(int openSocket);
+  DcmTransportConnection(DcmNativeSocketType openSocket);
 
   /** destructor
    */
@@ -183,12 +184,12 @@ protected:
   /** returns the socket file descriptor managed by this object.
    *  @return socket file descriptor
    */
-  int getSocket() { return theSocket; }
+  DcmNativeSocketType getSocket() { return theSocket; }
 
   /** set the socket file descriptor managed by this object.
    *  @param socket file descriptor
    */
-  void setSocket(int socket) { theSocket = socket; }
+  void setSocket(DcmNativeSocketType socket) { theSocket = socket; }
 
 private:
 
@@ -234,8 +235,8 @@ private:
    */
   static OFBool fastSelectReadableAssociation(DcmTransportConnection *connections[], int connCount, int timeout);
 
-  /// the socket file descriptor used by the transport connection.
-  int theSocket;
+  /// the socket file descriptor/handle used by the transport connection.
+  DcmNativeSocketType theSocket;
 };
 
 
@@ -250,7 +251,7 @@ public:
    *    the connection must already be established on socket level. This object
    *    takes over control of the socket.
    */
-  DcmTCPConnection(int openSocket);
+  DcmTCPConnection(DcmNativeSocketType openSocket);
 
   /** destructor
    */

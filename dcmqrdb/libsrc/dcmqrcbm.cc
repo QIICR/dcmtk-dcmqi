@@ -20,6 +20,7 @@
  */
 
 #include "dcmtk/config/osconfig.h"    /* make sure OS specific configuration is included first */
+
 #include "dcmtk/dcmqrdb/dcmqrcbm.h"
 
 #include "dcmtk/dcmqrdb/dcmqrcnf.h"
@@ -164,7 +165,7 @@ void DcmQueryRetrieveMoveContext::callbackHandler(
 
 void DcmQueryRetrieveMoveContext::addFailedUIDInstance(const char *sopInstance)
 {
-    int len;
+    size_t len;
 
     if (failedUIDs == NULL) {
         if ((failedUIDs = (char*)malloc(DIC_UI_LEN+1)) == NULL) {
@@ -287,7 +288,6 @@ OFCondition DcmQueryRetrieveMoveContext::buildSubAssociation(T_DIMSE_C_MoveRQ *r
     DIC_NODENAME dstHostName;
     DIC_NODENAME dstHostNamePlusPort;
     int dstPortNumber;
-    DIC_NODENAME localHostName;
     T_ASC_Parameters *params;
     OFString temp_str;
 
@@ -317,9 +317,8 @@ OFCondition DcmQueryRetrieveMoveContext::buildSubAssociation(T_DIMSE_C_MoveRQ *r
         }
     }
     if (cond.good()) {
-        gethostname(localHostName, sizeof(localHostName) - 1);
         sprintf(dstHostNamePlusPort, "%s:%d", dstHostName, dstPortNumber);
-        ASC_setPresentationAddresses(params, localHostName,
+        ASC_setPresentationAddresses(params, OFStandard::getHostName().c_str(),
             dstHostNamePlusPort);
         ASC_setAPTitles(params, ourAETitle.c_str(), dstAETitle,NULL);
 
@@ -643,6 +642,16 @@ OFCondition DcmQueryRetrieveMoveContext::addAllStoragePresentationContexts(T_ASC
       case EXS_MPEG4StereoHighProfileLevel4_2:
         /* we only propose MPEG4 Stereo HP/L4.2 since we don't want to decompress */
         transferSyntaxes[0] = UID_MPEG4StereoHighProfileLevel4_2TransferSyntax;
+        numTransferSyntaxes = 1;
+        break;
+      case EXS_HEVCMainProfileLevel5_1:
+        /* we only propose HEVC/H.265 Main Profile/L5.1 since we don't want to decompress */
+        transferSyntaxes[0] = UID_HEVCMainProfileLevel5_1TransferSyntax;
+        numTransferSyntaxes = 1;
+        break;
+      case EXS_HEVCMain10ProfileLevel5_1:
+        /* we only propose HEVC/H.265 Main 10 Profile/L5.1 since we don't want to decompress */
+        transferSyntaxes[0] = UID_HEVCMain10ProfileLevel5_1TransferSyntax;
         numTransferSyntaxes = 1;
         break;
       case EXS_RLELossless:

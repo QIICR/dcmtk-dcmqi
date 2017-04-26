@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1998-2016, OFFIS e.V.
+ *  Copyright (C) 1998-2017, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -21,6 +21,7 @@
 
 
 #include "dcmtk/config/osconfig.h"    /* make sure OS specific configuration is included first */
+
 #include "dcmtk/dcmpstat/dviface.h"
 
 #include "dcmtk/dcmpstat/dvpsdef.h"   /* for constants */
@@ -92,7 +93,6 @@ BEGIN_EXTERN_C
 END_EXTERN_C
 
 #ifdef HAVE_WINDOWS_H
-#include <windows.h>
 #include <winbase.h>     /* for CreateProcess */
 #endif
 
@@ -224,13 +224,13 @@ DVInterface::DVInterface(const char *config_file, OFBool useLog)
 
             // This will badly interact with oflog config files :(
             const char *pattern = "%D, Level %p, Module DCMPSTAT%n%m%n";
-            OFauto_ptr<dcmtk::log4cplus::Layout> layout(new dcmtk::log4cplus::PatternLayout(pattern));
+            OFunique_ptr<dcmtk::log4cplus::Layout> layout(new dcmtk::log4cplus::PatternLayout(pattern));
             dcmtk::log4cplus::SharedAppenderPtr logfile(new dcmtk::log4cplus::FileAppender(filepath, STD_NAMESPACE ios::app));
             // We can't use OFLog::getLogger() here because that doesn't let us
             // configure the object
             dcmtk::log4cplus::Logger log = dcmtk::log4cplus::Logger::getInstance("dcmtk.dcmpstat.logfile");
 
-            logfile->setLayout(layout);
+            logfile->setLayout(OFmove(layout));
             log.addAppender(logfile);
             log.setLogLevel(getLogLevel());
 
@@ -2459,22 +2459,11 @@ OFCondition DVInterface::terminateQueryRetrieveServer()
   if (getQueryRetrieveServerName()==NULL) return EC_IllegalCall;
   if (configPath.empty()) return EC_IllegalCall;
 
-#ifdef HAVE_GUSI_H
-  GUSISetup(GUSIwithSIOUXSockets);
-  GUSISetup(GUSIwithInternetSockets);
-#endif
-
-#ifdef HAVE_WINSOCK_H
-  WSAData winSockData;
-  /* we need at least version 1.1 */
-  WORD winSockVersionNeeded = MAKEWORD( 1, 1 );
-  WSAStartup(winSockVersionNeeded, &winSockData);
-#endif
+  OFStandard::initializeNetwork();
 
   OFCondition result = EC_Normal;
   T_ASC_Network *net=NULL;
   T_ASC_Parameters *params=NULL;
-  DIC_NODENAME localHost;
   DIC_NODENAME peerHost;
   T_ASC_Association *assoc=NULL;
 
@@ -2487,9 +2476,8 @@ OFCondition DVInterface::terminateQueryRetrieveServer()
     if (cond.good())
     {
       ASC_setAPTitles(params, getNetworkAETitle(), getQueryRetrieveAETitle(), NULL);
-      gethostname(localHost, sizeof(localHost) - 1);
       sprintf(peerHost, "localhost:%d", OFstatic_cast(int, getQueryRetrievePort()));
-      ASC_setPresentationAddresses(params, localHost, peerHost);
+      ASC_setPresentationAddresses(params, OFStandard::getHostName().c_str(), peerHost);
 
       const char* transferSyntaxes[] = { UID_LittleEndianImplicitTransferSyntax };
       cond = ASC_addPresentationContext(params, 1, UID_PrivateShutdownSOPClass, transferSyntaxes, 1);
@@ -2504,9 +2492,7 @@ OFCondition DVInterface::terminateQueryRetrieveServer()
     ASC_dropNetwork(&net);
   } else result = EC_IllegalCall;
 
-#ifdef HAVE_WINSOCK_H
-  WSACleanup();
-#endif
+  OFStandard::shutdownNetwork();
 
   return result;
 }
@@ -3609,22 +3595,11 @@ OFCondition DVInterface::terminatePrintServer()
   if (getPrintServerName()==NULL) return EC_IllegalCall;
   if (configPath.empty()) return EC_IllegalCall;
 
-#ifdef HAVE_GUSI_H
-  GUSISetup(GUSIwithSIOUXSockets);
-  GUSISetup(GUSIwithInternetSockets);
-#endif
-
-#ifdef HAVE_WINSOCK_H
-  WSAData winSockData;
-  /* we need at least version 1.1 */
-  WORD winSockVersionNeeded = MAKEWORD( 1, 1 );
-  WSAStartup(winSockVersionNeeded, &winSockData);
-#endif
+  OFStandard::initializeNetwork();
 
   OFCondition result = EC_Normal;
   T_ASC_Network *net=NULL;
   T_ASC_Parameters *params=NULL;
-  DIC_NODENAME localHost;
   DIC_NODENAME peerHost;
   T_ASC_Association *assoc=NULL;
   const char *target = NULL;
@@ -3735,9 +3710,8 @@ OFCondition DVInterface::terminatePrintServer()
         }
 
         ASC_setAPTitles(params, getNetworkAETitle(), getTargetAETitle(target), NULL);
-        gethostname(localHost, sizeof(localHost) - 1);
         sprintf(peerHost, "%s:%d", getTargetHostname(target), OFstatic_cast(int, getTargetPort(target)));
-        ASC_setPresentationAddresses(params, localHost, peerHost);
+        ASC_setPresentationAddresses(params, OFStandard::getHostName().c_str(), peerHost);
 
         if (cond.good()) cond = ASC_setTransportLayerType(params, useTLS);
 
@@ -3755,9 +3729,7 @@ OFCondition DVInterface::terminatePrintServer()
     } else result = EC_IllegalCall;
   }
 
-#ifdef HAVE_WINSOCK_H
-  WSACleanup();
-#endif
+  OFStandard::shutdownNetwork();
 
   return result;    // result of last process only
 }

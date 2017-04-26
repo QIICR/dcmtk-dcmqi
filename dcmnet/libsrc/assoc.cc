@@ -90,6 +90,12 @@
 */
 
 #include "dcmtk/config/osconfig.h"    /* make sure OS specific configuration is included first */
+
+#ifdef HAVE_WINDOWS_H
+// on Windows, we need Winsock2 for network functions
+#include <winsock2.h>
+#endif
+
 #include "dcmtk/dcmnet/assoc.h"       /* always include the module header */
 #include "dcmtk/dcmnet/diutil.h"
 
@@ -1680,7 +1686,11 @@ ASC_dataWaiting(T_ASC_Association * association, int timeout)
 OFBool
 ASC_associationWaiting(T_ASC_Network * network, int timeout)
 {
+#ifdef _WIN32
+    SOCKET s;
+#else
     int s;
+#endif
     struct timeval t;
     fd_set fdset;
     int nfound;
@@ -1688,8 +1698,13 @@ ASC_associationWaiting(T_ASC_Network * network, int timeout)
     if (network == NULL) return OFFalse;
 
     s = DUL_networkSocket(network->network);
+
+#ifdef _WIN32
+    if (s == INVALID_SOCKET) return OFFalse;
+#else
     if (s < 0)
         return OFFalse;
+#endif
 
     FD_ZERO(&fdset);
 #ifdef __MINGW32__
@@ -1701,9 +1716,10 @@ ASC_associationWaiting(T_ASC_Network * network, int timeout)
     t.tv_sec = timeout;
     t.tv_usec = 0;
 #ifdef HAVE_INTP_SELECT
-    nfound = select(s + 1, (int *)(&fdset), NULL, NULL, &t);
+    nfound = select(OFstatic_cast(int, s + 1), (int *)(&fdset), NULL, NULL, &t);
 #else
-    nfound = select(s + 1, &fdset, NULL, NULL, &t);
+    // the typecast is safe because Windows ignores the first select() parameter anyway
+    nfound = select(OFstatic_cast(int, s + 1), &fdset, NULL, NULL, &t);
 #endif
     if (DCM_dcmnetLogger.isEnabledFor(OFLogger::DEBUG_LOG_LEVEL))
     {

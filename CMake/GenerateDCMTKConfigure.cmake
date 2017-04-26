@@ -118,7 +118,7 @@ SET(CANONICAL_HOST_TYPE "${SYSTEM_PROCESSOR}-${CMAKE_SYSTEM_NAME}")
 DCMTK_UNSET(SYSTEM_PROCESSOR)
 
 # Configure dictionary path and install prefix
-IF(WIN32 AND NOT CYGWIN AND NOT MINGW)
+IF(WIN32 AND NOT CYGWIN)
   # Set DCMTK_PREFIX needed within some code. Be sure that all / are replaced by \\.
   SET(DCMTK_PREFIX "${CMAKE_INSTALL_PREFIX}")
   STRING(REGEX REPLACE "/" "\\\\\\\\" DCMTK_PREFIX "${DCMTK_PREFIX}")
@@ -140,7 +140,7 @@ IF(WIN32 AND NOT CYGWIN AND NOT MINGW)
   # Set default directory for configuration and support data.
   SET(DCMTK_DEFAULT_CONFIGURATION_DIR "")
   SET(DCMTK_DEFAULT_SUPPORT_DATA_DIR "")
-ELSE(WIN32 AND NOT CYGWIN AND NOT MINGW)
+ELSE(WIN32 AND NOT CYGWIN)
   # Set DCMTK_PREFIX needed within some code.
   SET(DCMTK_PREFIX "${CMAKE_INSTALL_PREFIX}")
   # Set path and multiple path separator being used in dictionary code etc.
@@ -159,7 +159,7 @@ ELSE(WIN32 AND NOT CYGWIN AND NOT MINGW)
   # Set default directory for configuration and support data.
   SET(DCMTK_DEFAULT_CONFIGURATION_DIR "${DCMTK_PREFIX}/${DCMTK_INSTALL_ETCDIR}/")
   SET(DCMTK_DEFAULT_SUPPORT_DATA_DIR "${DCMTK_PREFIX}/${DCMTK_INSTALL_DATDIR}/")
-ENDIF(WIN32 AND NOT CYGWIN AND NOT MINGW)
+ENDIF(WIN32 AND NOT CYGWIN)
 
 # Check the sizes of various types
 INCLUDE (CheckTypeSize)
@@ -172,12 +172,12 @@ CHECK_TYPE_SIZE("short" SIZEOF_SHORT)
 CHECK_TYPE_SIZE("void*" SIZEOF_VOID_P)
 
 # Check for include files, libraries, and functions
-INCLUDE(${CMAKE_ROOT}/Modules/CheckIncludeFileCXX.cmake)
-INCLUDE(${CMAKE_ROOT}/Modules/CheckIncludeFiles.cmake)
-INCLUDE(${CMAKE_ROOT}/Modules/CheckSymbolExists.cmake)
-INCLUDE(${CMAKE_ROOT}/Modules/CheckFunctionExists.cmake)
-INCLUDE(${CMAKE_ROOT}/Modules/CheckLibraryExists.cmake)
-INCLUDE(${DCMTK_CMAKE_INCLUDE}CMake/CheckFunctionWithHeaderExists.cmake)
+INCLUDE("${CMAKE_ROOT}/Modules/CheckIncludeFileCXX.cmake")
+INCLUDE("${CMAKE_ROOT}/Modules/CheckIncludeFiles.cmake")
+INCLUDE("${CMAKE_ROOT}/Modules/CheckSymbolExists.cmake")
+INCLUDE("${CMAKE_ROOT}/Modules/CheckFunctionExists.cmake")
+INCLUDE("${CMAKE_ROOT}/Modules/CheckLibraryExists.cmake")
+INCLUDE("${DCMTK_CMAKE_INCLUDE}CMake/CheckFunctionWithHeaderExists.cmake")
 
 CHECK_SYMBOL_EXISTS(__FUNCTION__        "" HAVE___FUNCTION___MACRO)
 CHECK_SYMBOL_EXISTS(__PRETTY_FUNCTION__ "" HAVE___PRETTY_FUNCTION___MACRO)
@@ -327,6 +327,7 @@ ENDIF(WIN32 AND NOT CYGWIN)
   CHECK_FUNCTION_EXISTS(gethostname HAVE_GETHOSTNAME)
   CHECK_FUNCTION_EXISTS(gethostid HAVE_GETHOSTID)
   CHECK_FUNCTION_EXISTS(getlogin HAVE_GETLOGIN)
+  CHECK_FUNCTION_EXISTS(getlogin_r HAVE_GETLOGIN_R)
   CHECK_FUNCTION_EXISTS(getpid HAVE_GETPID)
   CHECK_FUNCTION_EXISTS(getpwnam HAVE_GETPWNAM)
   CHECK_FUNCTION_EXISTS(getsockname HAVE_GETSOCKNAME)
@@ -350,6 +351,7 @@ ENDIF(WIN32 AND NOT CYGWIN)
   CHECK_FUNCTION_EXISTS(memset HAVE_MEMSET)
   CHECK_FUNCTION_EXISTS(mkstemp HAVE_MKSTEMP)
   CHECK_FUNCTION_EXISTS(mktemp HAVE_MKTEMP)
+  CHECK_FUNCTION_EXISTS(readdir_r HAVE_READDIR_R)
   CHECK_FUNCTION_EXISTS(rindex HAVE_RINDEX)
   CHECK_FUNCTION_EXISTS(select HAVE_SELECT)
   CHECK_FUNCTION_EXISTS(setsockopt HAVE_SETSOCKOPT)
@@ -478,7 +480,7 @@ ENDIF(WIN32 AND NOT CYGWIN)
 
   IF(HAVE_WINSOCK_H)
     SET(HEADERS ${HEADERS} winsock.h)
-    SET(CMAKE_REQUIRED_LIBRARIES ${CMAKE_REQUIRED_LIBRARIES} ws2_32 netapi32 wsock32)
+    SET(CMAKE_REQUIRED_LIBRARIES ${CMAKE_REQUIRED_LIBRARIES} iphlpapi ws2_32 netapi32 wsock32)
   ENDIF(HAVE_WINSOCK_H)
 
   # std::vsnprintf and std::vsnprintf need the C++ version of the headers.
@@ -570,6 +572,8 @@ ENDIF(WIN32 AND NOT CYGWIN)
   CHECK_FUNCTIONWITHHEADER_EXISTS("ulonglong definition" "${HEADERS}" HAVE_ULONGLONG)
   CHECK_FUNCTIONWITHHEADER_EXISTS("long long definition" "${HEADERS}" HAVE_LONG_LONG)
   CHECK_FUNCTIONWITHHEADER_EXISTS("unsigned long long definition" "${HEADERS}" HAVE_UNSIGNED_LONG_LONG)
+  CHECK_FUNCTIONWITHHEADER_EXISTS("int64_t definition" "${HEADERS}" HAVE_INT64_T)
+  CHECK_FUNCTIONWITHHEADER_EXISTS("uint64_t definition" "${HEADERS}" HAVE_UINT64_T)
 
   # File access stuff
   CHECK_FUNCTIONWITHHEADER_EXISTS("fpos64_t definition" "${HEADERS}" HAVE_FPOS64_T)
@@ -588,14 +592,63 @@ IF(DCMTK_WITH_OPENSSL)
   CHECK_FUNCTIONWITHHEADER_EXISTS("RAND_egd" "openssl/rand.h" HAVE_RAND_EGD ${OPENSSL_LIBS})
 ENDIF(DCMTK_WITH_OPENSSL)
 
+IF(HAVE_LOCKF AND ANDROID)
+  # When Android introduced lockf, they forgot to put the constants like F_LOCK in the
+  # appropriate headers, this tests if they are defined and disables lockf if they are not
+  CHECK_FUNCTIONWITHHEADER_EXISTS("lockf(0, F_LOCK, 0)" "${HEADERS}" HAVE_LOCKF_CONSTANTS)
+  IF(NOT HAVE_LOCKF_CONSTANTS)
+    SET(HAVE_LOCKF FALSE CACHE INTERNAL "lockf implementation is broken")
+  ENDIF()
+ENDIF(HAVE_LOCKF AND ANDROID)
+
 # Tests that require a try-compile
-INCLUDE(${DCMTK_CMAKE_INCLUDE}CMake/dcmtkTryCompile.cmake)
-INCLUDE(${DCMTK_CMAKE_INCLUDE}CMake/dcmtkTryRun.cmake)
+INCLUDE("${DCMTK_CMAKE_INCLUDE}CMake/dcmtkTryCompile.cmake")
+INCLUDE("${DCMTK_CMAKE_INCLUDE}CMake/dcmtkTryRun.cmake")
+
+IF(HAVE_MATH_H)
+  IF(HAVE_LIBC_H)
+    # checks if <libc.h> and <math.h> cause a problem if libc.h is included extern "C"
+    # and math.h is not. This is the case on QNX 6.2.x
+    DCMTK_TRY_COMPILE(INCLUDE_LIBC_H_AS_EXTERN_C "<libc.h> can be included as extern \"C\""
+    "#include <math.h
+extern \"C\" {
+#include <libc.h>
+}
+int main()
+{
+    int i = 0;
+    return 0;
+}")
+    IF(INCLUDE_LIBC_H_AS_EXTERN_C)
+      SET(INCLUDE_LIBC_H_AS_CXX 0 CACHE INTERNAL "libc.h should be treated as a C++ header")
+    ELSE()
+      SET(INCLUDE_LIBC_H_AS_CXX 1 CACHE INTERNAL "libc.h should be treated as a C++ header")
+    ENDIF()
+  ENDIF(HAVE_LIBC_H)
+
+  # checks if <math.h> must be included as a C++ include file (i.e. without extern "C").
+  # Some sytems (Win32, HP/UX 10) use C++ language features in <math.h>
+  DCMTK_TRY_COMPILE(INCLUDE_MATH_H_AS_EXTERN_C "<math.h> can be included as extern \"C\""
+  "extern \"C\" {
+#include <math.h>
+}
+int main()
+{
+    int i = 0;
+    return 0;
+}")
+  IF(INCLUDE_MATH_H_AS_EXTERN_C)
+    SET(INCLUDE_MATH_H_AS_CXX 0 CACHE INTERNAL "math.h should be treated as a C++ header")
+  ELSE()
+    SET(INCLUDE_MATH_H_AS_CXX 1 CACHE INTERNAL "math.h should be treated as a C++ header")
+  ENDIF()
+ENDIF(HAVE_MATH_H)
+
 
 IF(NOT DEFINED C_CHAR_UNSIGNED)
   MESSAGE(STATUS "Checking signedness of char")
-  DCMTK_TRY_RUN(C_CHAR_SIGNED C_CHAR_SIGNED_COMPILED ${CMAKE_BINARY_DIR}/CMakeTmp/Char
-          ${DCMTK_SOURCE_DIR}/CMake/dcmtkTestCharSignedness.cc
+  DCMTK_TRY_RUN(C_CHAR_SIGNED C_CHAR_SIGNED_COMPILED "${CMAKE_BINARY_DIR}/CMakeTmp/Char"
+          "${DCMTK_SOURCE_DIR}/CMake/dcmtkTestCharSignedness.cc"
           COMPILE_OUTPUT_VARIABLE C_CHAR_SIGNED_COMPILE_OUTPUT)
   IF(C_CHAR_SIGNED_COMPILED)
     IF(C_CHAR_SIGNED)
@@ -861,34 +914,60 @@ int main()
     return sizeof(sfinae<test>(0)) == sizeof(yes_type);
 }")
 
+DCMTK_TRY_COMPILE(HAVE_STD_NAMESPACE "ANSI standard C++ includes use std namespace"
+    "#include <iostream>
+int main()
+{
+    using namespace std;
+    std::cout << endl;
+    return 0;
+}")
+
+DCMTK_TRY_COMPILE(HAVE_STD__NOTHROW "the compiler supports std::nothrow"
+    "#include <new>
+int main()
+{
+    int* i = new (std::nothrow) int;
+    return 0;
+}")
+
+DCMTK_TRY_COMPILE(HAVE_NOTHROW_DELETE "the compiler supports operator delete (std::nothrow)"
+    "#include <new>
+int main()
+{
+    int* i = 0;
+    operator delete (i,std::nothrow);
+    return 0;
+}")
+
 # Compile config/arith.cc and generate config/arith.h
 FUNCTION(INSPECT_FUNDAMENTAL_ARITHMETIC_TYPES)
-  SET(ARITH_H_FILE ${DCMTK_BINARY_DIR}/config/include/dcmtk/config/arith.h)
+  SET(ARITH_H_FILE "${DCMTK_BINARY_DIR}/config/include/dcmtk/config/arith.h")
   IF("${DCMTK_SOURCE_DIR}/config/arith.cc" IS_NEWER_THAN "${ARITH_H_FILE}")
     IF(CMAKE_CROSSCOMPILING)
       IF(WIN32)
-        UNIX_TO_WINE_PATH(ARITH_H_FILE ${ARITH_H_FILE})
-        STRING(REPLACE "\\" "\\\\" ARITH_H_FILE ${ARITH_H_FILE})
+        UNIX_TO_WINE_PATH(ARITH_H_FILE "${ARITH_H_FILE}")
+        STRING(REPLACE "\\" "\\\\" ARITH_H_FILE "${ARITH_H_FILE}")
       ELSEIF(ANDROID)
-        SET(ARITH_H_DESTINATION ${ARITH_H_FILE})
+        SET(ARITH_H_DESTINATION "${ARITH_H_FILE}")
         SET(ARITH_H_FILE "${ANDROID_TEMPORARY_FILES_LOCATION}/arith.h")
       ENDIF()
     ENDIF(CMAKE_CROSSCOMPILING)
     DCMTK_TRY_RUN(
       RESULT COMPILED
-      ${DCMTK_BINARY_DIR}/CMakeTmp/Arith
-      ${DCMTK_SOURCE_DIR}/config/arith.cc
+      "${DCMTK_BINARY_DIR}/CMakeTmp/Arith"
+      "${DCMTK_SOURCE_DIR}/config/arith.cc"
       COMPILE_DEFINITIONS -I"${DCMTK_BINARY_DIR}/config/include" -I"${DCMTK_SOURCE_DIR}/ofstd/include" -I"${DCMTK_SOURCE_DIR}/ofstd/libsrc"
       RUN_OUTPUT_VARIABLE OUTPUT
       COMPILE_OUTPUT_VARIABLE CERR
-      ARGS \"${ARITH_H_FILE}\"
+      ARGS "\\\"${ARITH_H_FILE}\\\""
     )
     IF(COMPILED)
       IF(NOT RESULT)
         MESSAGE(STATUS "${OUTPUT}")
         IF(CMAKE_CROSSCOMPILING)
           IF(ANDROID)
-            DCMTK_ANDROID_PULL(DCMTK_ANDROID_EMULATOR_INSTANCE ${ARITH_H_FILE} DESTINATION ${ARITH_H_DESTINATION})
+            DCMTK_ANDROID_PULL(DCMTK_ANDROID_EMULATOR_INSTANCE "${ARITH_H_FILE}" DESTINATION "${ARITH_H_DESTINATION}")
           ENDIF()
         ENDIF(CMAKE_CROSSCOMPILING)
       ELSE(NOT RESULT)

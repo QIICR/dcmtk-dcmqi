@@ -142,19 +142,7 @@ WlmActivityManager::WlmActivityManager(
   if (!opt_forkedChild)
     DCMWLM_WARN("(notice: dcmdata auto correction disabled.)");
 
-#ifdef HAVE_GUSI_H
-  // needed for Macintosh.
-  GUSISetup( GUSIwithSIOUXSockets );
-  GUSISetup( GUSIwithInternetSockets );
-#endif
-
-#ifdef HAVE_WINSOCK_H
-  WSAData winSockData;
-  // we need at least version 1.1.
-  WORD winSockVersionNeeded = MAKEWORD( 1, 1 );
-  WSAStartup(winSockVersionNeeded, &winSockData);
-#endif
-
+  OFStandard::initializeNetwork();
 }
 
 // ----------------------------------------------------------------------------
@@ -171,9 +159,7 @@ WlmActivityManager::~WlmActivityManager()
   delete[] supportedAbstractSyntaxes[1];
   delete[] supportedAbstractSyntaxes;
 
-#ifdef HAVE_WINSOCK_H
-  WSACleanup();
-#endif
+  OFStandard::shutdownNetwork();
 }
 
 // ----------------------------------------------------------------------------
@@ -208,26 +194,8 @@ OFCondition WlmActivityManager::StartProvidingService()
   /* if this process was started by CreateProcess, opt_forkedChild is set */
   if (opt_forkedChild)
   {
-    /* tell dcmnet DUL about child process status, too */
-    DUL_markProcessAsForkedChild();
-
-    char buf[256];
-    DWORD bytesRead = 0;
-    HANDLE hStdIn = GetStdHandle(STD_INPUT_HANDLE);
-
-    // read socket handle number from stdin, i.e. the anonymous pipe
-    // to which our parent process has written the handle number.
-    if (ReadFile(hStdIn, buf, sizeof(buf) - 1, &bytesRead, NULL))
-    {
-      // make sure buffer is zero terminated
-      buf[bytesRead] = '\0';
-      dcmExternalSocketHandle.set(atoi(buf));
-    }
-    else
-    {
-      DCMWLM_ERROR("cannot read socket handle: " << GetLastError());
-      exit(0);
-    }
+    // we are a child process in multi-process mode
+    if (DUL_readSocketHandleAsForkedChild().bad()) exit(10);
   }
   else
   {

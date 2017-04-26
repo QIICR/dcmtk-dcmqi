@@ -143,6 +143,8 @@ BEGIN_EXTERN_C
 END_EXTERN_C
 
 #ifdef HAVE_WINDOWS_H
+#include <winsock2.h>
+#define WIN32_LEAN_AND_MEAN
 #include <windows.h>     /* for GetFileAttributes() */
 #include <direct.h>      /* for _mkdir() */
 #include <lm.h>          /* for NetWkstaUserGetInfo */
@@ -153,7 +155,23 @@ END_EXTERN_C
 #define F_OK 00 /* Existence only */
 #endif /* !R_OK */
 
+#elif defined(HAVE_WINSOCK_H)
+
+#include <winsock.h>  /* include winsock.h directly i.e. on MacOS */
+#ifdef macintosh
+/*
+** The WinSock header on Macintosh does not declare the WORD type nor the MAKEWORD
+** macro need to initialize the WinSock library.
+*/
+typedef u_short WORD;
+#define MAKEWORD(a,b) ((WORD) (((a)&0xff)<<8) | ((b)&0xff) )
+#endif /* macintosh */
+
 #endif /* HAVE_WINDOWS_H */
+
+#ifdef HAVE_GUSI_H
+#include <GUSI.h>
+#endif
 
 #ifdef _WIN32
 #include <process.h>     /* needed for declaration of getpid() */
@@ -2862,23 +2880,21 @@ OFString OFStandard::getUserName()
         OFnullptr
     );
     return &*buf.begin();
-#elif defined(HAVE_CUSERID) && !defined(__CYGWIN__)
-    char buf[L_cuserid];
-    return cuserid( buf );
-#elif defined(HAVE_GETLOGIN)
-#if defined(_REENTRANT) && !defined(_WIN32) && !defined(__CYGWIN__)
+#elif defined(HAVE_GETLOGIN_R)
     // use getlogin_r instead of getlogin
     char buf[513];
     if( getlogin_r( buf, 512 ) != 0 )
         return "<no-utmp-entry>";
     buf[512] = 0;
     return buf;
-#else
+#elif defined(HAVE_GETLOGIN)
     // thread unsafe
     if( const char* s = getlogin() )
         return s;
     return "<no-utmp-entry>";
-#endif
+#elif defined(HAVE_CUSERID)
+    char buf[L_cuserid];
+    return cuserid( buf );
 #else
     return "<unknown-user>";
 #endif
@@ -2897,6 +2913,46 @@ OFString OFStandard::getHostName()
     return buf;
 #else
     return "localhost";
+#endif
+}
+
+void OFStandard::initializeNetwork()
+{
+#ifdef HAVE_GUSI_H
+    GUSISetup(GUSIwithSIOUXSockets);
+    GUSISetup(GUSIwithInternetSockets);
+#endif
+
+#ifdef HAVE_WINSOCK_H
+    WSAData winSockData;
+    /* we need at least version 1.1 */
+    WORD winSockVersionNeeded = MAKEWORD( 1, 1 );
+    WSAStartup(winSockVersionNeeded, &winSockData);
+#endif
+}
+
+void OFStandard::shutdownNetwork()
+{
+#ifdef HAVE_WINSOCK_H
+    WSACleanup();
+#endif
+}
+
+OFerror_code OFStandard::getLastSystemErrorCode()
+{
+#ifdef _WIN32
+    return OFerror_code( GetLastError(), OFsystem_category() );
+#else
+    return OFerror_code( errno, OFsystem_category() );
+#endif
+}
+
+OFerror_code OFStandard::getLastNetworkErrorCode()
+{
+#ifdef HAVE_WINSOCK_H
+    return OFerror_code( WSAGetLastError(), OFsystem_category() );
+#else
+    return OFerror_code( errno, OFsystem_category() );
 #endif
 }
 

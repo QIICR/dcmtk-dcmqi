@@ -71,6 +71,7 @@
 #include "dcmtk/dcmnet/extneg.h"
 #include "dcmtk/dcmnet/dicom.h"
 #include "dcmtk/dcmnet/dcuserid.h"
+#include "dcmtk/dcmnet/dntypes.h"
 
 class DcmTransportConnection;
 class DcmTransportLayer;
@@ -100,7 +101,7 @@ extern DCMTK_DCMNET_EXPORT OFGlobal<Sint32> dcmConnectionTimeout;   /* default: 
  *  will be used by dcmnet the next time receiveTransportConnectionTCP() is called.
  *  Useful for use with proxy applications, but inherently thread unsafe!
  */
-extern DCMTK_DCMNET_EXPORT OFGlobal<int> dcmExternalSocketHandle;   /* default: -1 */
+extern DCMTK_DCMNET_EXPORT OFGlobal<DcmNativeSocketType> dcmExternalSocketHandle;   /* default: platform specific value that denotes <i>invalid</i> */
 
 /** When compiled with WITH_TCPWRAPPER, DCMTK server processes may use the TCP
  *  wrapper library to enforce access control - see hosts_access(5).  If this
@@ -348,7 +349,7 @@ typedef enum {
 */
 
 #define DUL_DULCOMPAT     2768240730UL
-#define DUL_DIMSECOMPAT   655360UL
+#define DUL_DIMSECOMPAT   786432UL
 #define DUL_MAXPDUCOMPAT  4278190335UL
 
 /* Define the function prototypes for this facility.
@@ -439,8 +440,9 @@ DCMTK_DCMNET_EXPORT OFString& dumpExtNegList(OFString& str, SOPClassExtendedNego
 
 DCMTK_DCMNET_EXPORT OFBool
 DUL_dataWaiting(DUL_ASSOCIATIONKEY * callerAssociation, int timeout);
-DCMTK_DCMNET_EXPORT int
-DUL_networkSocket(DUL_NETWORKKEY * callerNet);
+
+DCMTK_DCMNET_EXPORT DcmNativeSocketType DUL_networkSocket(DUL_NETWORKKEY * callerNet);
+
 DCMTK_DCMNET_EXPORT OFBool
 DUL_associationWaiting(DUL_NETWORKKEY * callerNet, int timeout);
 
@@ -482,6 +484,15 @@ DCMTK_DCMNET_EXPORT OFBool DUL_processIsForkedChild();
  *  in receiveTransportConnectionTCP(). The call is not reversible - use with care.
  */
 DCMTK_DCMNET_EXPORT void DUL_markProcessAsForkedChild();
+
+/** this helper function calls DUL_markProcessAsForkedChild(), then reads
+ *  the socket handle from the pipe opened by the parent process and
+ *  stores it in the global variable dcmExternalSocketHandle. This is
+ *  in most cases everything needed to prepare the network layer to act
+ *  as a forked child on Win32. On other operating system, the function does nothing.
+ * @return EC_Normal if successful, an error code otherwise.
+ */
+DCMTK_DCMNET_EXPORT OFCondition DUL_readSocketHandleAsForkedChild();
 
 /** this function marks the current process as a multi-process server and enables
  *  the creation of child processes for each incoming TCP transport connection

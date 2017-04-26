@@ -31,6 +31,7 @@
 
 BEGIN_EXTERN_C
 #ifdef HAVE_WINDOWS_H
+#define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <winbase.h>
 #endif
@@ -408,7 +409,11 @@ DcmTransportLayerStatus DcmTLSTransportLayer::addTrustedClientCertificateFile(co
   return TCS_ok;
 }
 
+#ifdef _WIN32
+DcmTransportConnection *DcmTLSTransportLayer::createConnection(SOCKET openSocket, OFBool useSecureLayer)
+#else
 DcmTransportConnection *DcmTLSTransportLayer::createConnection(int openSocket, OFBool useSecureLayer)
+#endif
 {
   if (useSecureLayer)
   {

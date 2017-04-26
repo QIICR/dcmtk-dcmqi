@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1998-2011, OFFIS e.V.
+ *  Copyright (C) 1998-2017, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -24,6 +24,7 @@
 #define DCMLAYER_H
 
 #include "dcmtk/config/osconfig.h"    /* make sure OS specific configuration is included first */
+
 #include "dcmtk/ofstd/oftypes.h"
 #include "dcmtk/ofstd/ofstring.h"
 
@@ -31,6 +32,7 @@
 #include "dcmtk/ofstd/ofstdinc.h"
 
 #include "dcmtk/dcmnet/dndefine.h"
+#include "dcmtk/dcmnet/dntypes.h"
 
 /** this enum represents the result of a transport layer operation
  *  which may be a transparent TCP/IP or a secure TLS operation.
@@ -90,7 +92,7 @@ public:
    *    transparent layer is used.
    *  @return pointer to new connection object if successful, NULL otherwise.
    */
-  virtual DcmTransportConnection *createConnection(int openSocket, OFBool useSecureLayer);
+  virtual DcmTransportConnection *createConnection(DcmNativeSocketType openSocket, OFBool useSecureLayer);
 
 private:
 

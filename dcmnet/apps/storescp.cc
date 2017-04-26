@@ -41,10 +41,6 @@ BEGIN_EXTERN_C
 #endif
 END_EXTERN_C
 
-#ifdef HAVE_GUSI_H
-#include <GUSI.h>
-#endif
-
 #ifdef HAVE_WINDOWS_H
 #include <direct.h>      /* for _mkdir() */
 #endif
@@ -238,18 +234,7 @@ int main(int argc, char *argv[])
   T_ASC_Network *net;
   DcmAssociationConfiguration asccfg;
 
-#ifdef HAVE_GUSI_H
-  /* needed for Macintosh */
-  GUSISetup(GUSIwithSIOUXSockets);
-  GUSISetup(GUSIwithInternetSockets);
-#endif
-
-#ifdef HAVE_WINSOCK_H
-  WSAData winSockData;
-  /* we need at least version 1.1 */
-  WORD winSockVersionNeeded = MAKEWORD( 1, 1 );
-  WSAStartup(winSockVersionNeeded, &winSockData);
-#endif
+  OFStandard::initializeNetwork();
 
   OFString temp_str;
   OFOStringStream optStream;
@@ -298,6 +283,8 @@ int main(int argc, char *argv[])
       cmd.addOption("--prefer-mpeg4-2-2d",      "+x2",     "prefer MPEG4 AVC/H.264 HP / Level 4.2 TS (2D)");
       cmd.addOption("--prefer-mpeg4-2-3d",      "+x3",     "prefer MPEG4 AVC/H.264 HP / Level 4.2 TS (3D)");
       cmd.addOption("--prefer-mpeg4-2-st",      "+xo",     "prefer MPEG4 AVC/H.264 Stereo HP / Level 4.2 TS");
+      cmd.addOption("--prefer-hevc",            "+x4",     "prefer HEVC/H.265 Main Profile / Level 5.1 TS");
+      cmd.addOption("--prefer-hevc10",          "+x5",     "prefer HEVC/H.265 Main 10 Profile / Level 5.1 TS");
       cmd.addOption("--prefer-rle",             "+xr",     "prefer RLE lossless TS");
 #ifdef WITH_ZLIB
       cmd.addOption("--prefer-deflated",        "+xd",     "prefer deflated expl. VR little endian TS");
@@ -559,6 +546,8 @@ int main(int argc, char *argv[])
     if (cmd.findOption("--prefer-mpeg4-2-2d")) opt_networkTransferSyntax = EXS_MPEG4HighProfileLevel4_2_For2DVideo;
     if (cmd.findOption("--prefer-mpeg4-2-3d")) opt_networkTransferSyntax = EXS_MPEG4HighProfileLevel4_2_For3DVideo;
     if (cmd.findOption("--prefer-mpeg4-2-st")) opt_networkTransferSyntax = EXS_MPEG4StereoHighProfileLevel4_2;
+    if (cmd.findOption("--prefer-hevc")) opt_networkTransferSyntax = EXS_HEVCMainProfileLevel5_1;
+    if (cmd.findOption("--prefer-hevc10")) opt_networkTransferSyntax = EXS_HEVCMain10ProfileLevel5_1;
     if (cmd.findOption("--prefer-rle")) opt_networkTransferSyntax = EXS_RLELossless;
 #ifdef WITH_ZLIB
     if (cmd.findOption("--prefer-deflated")) opt_networkTransferSyntax = EXS_DeflatedLittleEndianExplicit;
@@ -624,6 +613,8 @@ int main(int argc, char *argv[])
       app.checkConflict("--config-file", "--prefer-mpeg4-2-2d", opt_networkTransferSyntax == EXS_MPEG4HighProfileLevel4_2_For2DVideo);
       app.checkConflict("--config-file", "--prefer-mpeg4-2-3d", opt_networkTransferSyntax == EXS_MPEG4HighProfileLevel4_2_For3DVideo);
       app.checkConflict("--config-file", "--prefer-mpeg4-2-st", opt_networkTransferSyntax == EXS_MPEG4StereoHighProfileLevel4_2);
+      app.checkConflict("--config-file", "--prefer-hevc", opt_networkTransferSyntax == EXS_HEVCMainProfileLevel5_1);
+      app.checkConflict("--config-file", "--prefer-hevc10", opt_networkTransferSyntax == EXS_HEVCMain10ProfileLevel5_1);
       app.checkConflict("--config-file", "--prefer-rle", opt_networkTransferSyntax == EXS_RLELossless);
 #ifdef WITH_ZLIB
       app.checkConflict("--config-file", "--prefer-deflated", opt_networkTransferSyntax == EXS_DeflatedLittleEndianExplicit);
@@ -705,6 +696,8 @@ int main(int argc, char *argv[])
       app.checkConflict("--write-xfer-little", "--prefer-mpeg4-2-2d", opt_networkTransferSyntax == EXS_MPEG4HighProfileLevel4_2_For2DVideo);
       app.checkConflict("--write-xfer-little", "--prefer-mpeg4-2-3d", opt_networkTransferSyntax == EXS_MPEG4HighProfileLevel4_2_For3DVideo);
       app.checkConflict("--write-xfer-little", "--prefer-mpeg4-2-st", opt_networkTransferSyntax == EXS_MPEG4StereoHighProfileLevel4_2);
+      app.checkConflict("--write-xfer-little", "--prefer-hevc", opt_networkTransferSyntax == EXS_HEVCMainProfileLevel5_1);
+      app.checkConflict("--write-xfer-little", "--prefer-hevc10", opt_networkTransferSyntax == EXS_HEVCMain10ProfileLevel5_1);
       app.checkConflict("--write-xfer-little", "--prefer-rle", opt_networkTransferSyntax == EXS_RLELossless);
       // we don't have to check a conflict for --prefer-deflated because we can always convert that to uncompressed.
       opt_writeTransferSyntax = EXS_LittleEndianExplicit;
@@ -727,6 +720,8 @@ int main(int argc, char *argv[])
       app.checkConflict("--write-xfer-big", "--prefer-mpeg4-2-2d", opt_networkTransferSyntax == EXS_MPEG4HighProfileLevel4_2_For2DVideo);
       app.checkConflict("--write-xfer-big", "--prefer-mpeg4-2-3d", opt_networkTransferSyntax == EXS_MPEG4HighProfileLevel4_2_For3DVideo);
       app.checkConflict("--write-xfer-big", "--prefer-mpeg4-2-st", opt_networkTransferSyntax == EXS_MPEG4StereoHighProfileLevel4_2);
+      app.checkConflict("--write-xfer-big", "--prefer-hevc", opt_networkTransferSyntax == EXS_HEVCMainProfileLevel5_1);
+      app.checkConflict("--write-xfer-big", "--prefer-hevc10", opt_networkTransferSyntax == EXS_HEVCMain10ProfileLevel5_1);
       app.checkConflict("--write-xfer-big", "--prefer-rle", opt_networkTransferSyntax == EXS_RLELossless);
       // we don't have to check a conflict for --prefer-deflated because we can always convert that to uncompressed.
       opt_writeTransferSyntax = EXS_BigEndianExplicit;
@@ -749,6 +744,8 @@ int main(int argc, char *argv[])
       app.checkConflict("--write-xfer-implicit", "--prefer-mpeg4-2-2d", opt_networkTransferSyntax == EXS_MPEG4HighProfileLevel4_2_For2DVideo);
       app.checkConflict("--write-xfer-implicit", "--prefer-mpeg4-2-3d", opt_networkTransferSyntax == EXS_MPEG4HighProfileLevel4_2_For3DVideo);
       app.checkConflict("--write-xfer-implicit", "--prefer-mpeg4-2-st", opt_networkTransferSyntax == EXS_MPEG4StereoHighProfileLevel4_2);
+      app.checkConflict("--write-xfer-implicit", "--prefer-hevc", opt_networkTransferSyntax == EXS_HEVCMainProfileLevel5_1);
+      app.checkConflict("--write-xfer-implicit", "--prefer-hevc10", opt_networkTransferSyntax == EXS_HEVCMain10ProfileLevel5_1);
       app.checkConflict("--write-xfer-implicit", "--prefer-rle", opt_networkTransferSyntax == EXS_RLELossless);
       // we don't have to check a conflict for --prefer-deflated because we can always convert that to uncompressed.
       opt_writeTransferSyntax = EXS_LittleEndianImplicit;
@@ -772,6 +769,8 @@ int main(int argc, char *argv[])
       app.checkConflict("--write-xfer-deflated", "--prefer-mpeg4-2-2d", opt_networkTransferSyntax == EXS_MPEG4HighProfileLevel4_2_For2DVideo);
       app.checkConflict("--write-xfer-deflated", "--prefer-mpeg4-2-3d", opt_networkTransferSyntax == EXS_MPEG4HighProfileLevel4_2_For3DVideo);
       app.checkConflict("--write-xfer-deflated", "--prefer-mpeg4-2-st", opt_networkTransferSyntax == EXS_MPEG4StereoHighProfileLevel4_2);
+      app.checkConflict("--write-xfer-deflated", "--prefer-hevc", opt_networkTransferSyntax == EXS_HEVCMainProfileLevel5_1);
+      app.checkConflict("--write-xfer-deflated", "--prefer-hevc10", opt_networkTransferSyntax == EXS_HEVCMain10ProfileLevel5_1);
       app.checkConflict("--write-xfer-deflated", "--prefer-rle", opt_networkTransferSyntax == EXS_RLELossless);
       opt_writeTransferSyntax = EXS_DeflatedLittleEndianExplicit;
     }
@@ -1049,32 +1048,13 @@ int main(int argc, char *argv[])
 #elif defined(_WIN32)
   if (opt_forkedChild)
   {
-    // child process
-    DUL_markProcessAsForkedChild();
-
-    char buf[256];
-    DWORD bytesRead = 0;
-    HANDLE hStdIn = GetStdHandle(STD_INPUT_HANDLE);
-
-    // read socket handle number from stdin, i.e. the anonymous pipe
-    // to which our parent process has written the handle number.
-    if (ReadFile(hStdIn, buf, sizeof(buf) - 1, &bytesRead, NULL))
-    {
-      // make sure buffer is zero terminated
-      buf[bytesRead] = '\0';
-      dcmExternalSocketHandle.set(atoi(buf));
-    }
-    else
-    {
-      OFLOG_ERROR(storescpLogger, "cannot read socket handle: " << GetLastError());
-      return 1;
-    }
+    // we are a child process in multi-process mode
+    if (DUL_readSocketHandleAsForkedChild().bad()) return 1;
   }
   else
   {
     // parent process
-    if (opt_forkMode)
-      DUL_requestForkOnTransportConnectionReceipt(argc, argv);
+    if (opt_forkMode) DUL_requestForkOnTransportConnectionReceipt(argc, argv);
   }
 #endif
 
@@ -1214,9 +1194,7 @@ int main(int argc, char *argv[])
     return 1;
   }
 
-#ifdef HAVE_WINSOCK_H
-  WSACleanup();
-#endif
+  OFStandard::shutdownNetwork();
 
 #ifdef WITH_OPENSSL
   delete tLayer;
@@ -1468,6 +1446,22 @@ static OFCondition acceptAssociation(T_ASC_Network *net, DcmAssociationConfigura
     case EXS_MPEG4StereoHighProfileLevel4_2:
       /* we prefer MPEG4 Stereo HP/L4.2 */
       transferSyntaxes[0] = UID_MPEG4StereoHighProfileLevel4_2TransferSyntax;
+      transferSyntaxes[1] = UID_LittleEndianExplicitTransferSyntax;
+      transferSyntaxes[2] = UID_BigEndianExplicitTransferSyntax;
+      transferSyntaxes[3] = UID_LittleEndianImplicitTransferSyntax;
+      numTransferSyntaxes = 4;
+      break;
+    case EXS_HEVCMainProfileLevel5_1:
+      /* we prefer HEVC/H.265 Main Profile/L5.1 */
+      transferSyntaxes[0] = UID_HEVCMainProfileLevel5_1TransferSyntax;
+      transferSyntaxes[1] = UID_LittleEndianExplicitTransferSyntax;
+      transferSyntaxes[2] = UID_BigEndianExplicitTransferSyntax;
+      transferSyntaxes[3] = UID_LittleEndianImplicitTransferSyntax;
+      numTransferSyntaxes = 4;
+      break;
+    case EXS_HEVCMain10ProfileLevel5_1:
+      /* we prefer HEVC/H.265 Main 10 Profile/L5.1 */
+      transferSyntaxes[0] = UID_HEVCMain10ProfileLevel5_1TransferSyntax;
       transferSyntaxes[1] = UID_LittleEndianExplicitTransferSyntax;
       transferSyntaxes[2] = UID_BigEndianExplicitTransferSyntax;
       transferSyntaxes[3] = UID_LittleEndianImplicitTransferSyntax;
@@ -2014,6 +2008,17 @@ storeSCPCallback(
             tmpName = "ANONYMOUS";
             OFLOG_WARN(storescpLogger, "element PatientName " << DCM_PatientName << " absent or empty in data set, using '"
                  << tmpName << "' instead");
+          }
+          else
+          {
+              DcmElement *patElem = NULL;
+              OFString charset;
+              (*imageDataSet)->findAndGetElement(DCM_PatientName, patElem); // patElem cannot be NULL, see above
+              (*imageDataSet)->findAndGetOFStringArray(DCM_SpecificCharacterSet, charset);
+              if (!charset.empty() && !(charset == "ISO_IR 100") && (patElem->containsExtendedCharacters()))
+              {
+                  OFLOG_WARN(storescpLogger, "Patient name not in Latin-1 (charset: " << charset << "), ASCII dir name may be broken");
+              }
           }
 
           /* substitute non-ASCII characters in patient name to ASCII "equivalent" */

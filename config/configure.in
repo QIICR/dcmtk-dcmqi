@@ -98,7 +98,6 @@ AH_TOP([#ifndef OSCONFIG_H
 #ifdef __MINGW32__
 #define HAVE_WINDOWS_H 1
 #define HAVE_WINSOCK_H 1
-#define NO_IOS_BASE_ASSIGN 1
 #define ENVIRONMENT_PATH_SEPARATOR ';'
 #endif])
 
@@ -250,7 +249,7 @@ AC_CHECK_FUNCS(getpid mktemp tempnam tmpnam getenv mkstemp)
 AC_CHECK_FUNCS(stat)
 AC_CHECK_FUNCS(malloc_debug)
 AC_CHECK_FUNCS(strerror strdup bzero index rindex access)
-AC_CHECK_FUNCS(uname cuserid getlogin)
+AC_CHECK_FUNCS(uname cuserid getlogin getlogin_r)
 AC_CHECK_FUNCS(usleep)
 AC_CHECK_FUNCS(flock lockf)
 AC_CHECK_FUNCS(listen connect setsockopt getsockopt select)
@@ -265,6 +264,7 @@ AC_CHECK_FUNCS(strlcpy strlcat)
 AC_CHECK_FUNCS(vsnprintf)
 AC_CHECK_FUNCS(mbstowcs wcstombs)
 AC_CHECK_FUNCS(popen pclose)
+AC_CHECK_FUNCS(readdir_r)
 AC_FUNC_FSEEKO
 
 

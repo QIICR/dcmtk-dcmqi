@@ -64,6 +64,11 @@
 
 #include "dcmtk/config/osconfig.h"    /* make sure OS specific configuration is included first */
 
+#ifdef HAVE_WINDOWS_H
+// on Windows, we need Winsock2 for network functions
+#include <winsock2.h>
+#endif
+
 #define INCLUDE_CSTDLIB
 #define INCLUDE_CSTDIO
 #define INCLUDE_CSTRING
@@ -278,7 +283,12 @@ defragmentTCP(DcmTransportConnection *connection, DUL_BLOCKOPTIONS block, time_t
 
 static OFString dump_pdu(const char *type, void *buffer, unsigned long length);
 
+#ifdef _WIN32
+static void setTCPBufferLength(SOCKET sock);
+#else
 static void setTCPBufferLength(int sock);
+#endif
+
 OFCondition
 translatePresentationContextList(LST_HEAD ** internalList,
                                  LST_HEAD ** SCUSCPRoleList,
@@ -351,6 +361,7 @@ static FSM_FUNCTION FSM_FunctionTable[] = {
 
 static FSM_ENTRY StateTable[DUL_NUMBER_OF_EVENTS][DUL_NUMBER_OF_STATES] = {
     {
+        // EVENT,                    STATE,  ACTION,   NEXT_STATE
         {A_ASSOCIATE_REQ_LOCAL_USER, STATE1, AE_1, STATE4, "", "", NULL},
         {A_ASSOCIATE_REQ_LOCAL_USER, STATE2, NOACTION, NOSTATE, "", "", NULL},
         {A_ASSOCIATE_REQ_LOCAL_USER, STATE3, NOACTION, NOSTATE, "", "", NULL},
@@ -363,7 +374,7 @@ static FSM_ENTRY StateTable[DUL_NUMBER_OF_EVENTS][DUL_NUMBER_OF_STATES] = {
         {A_ASSOCIATE_REQ_LOCAL_USER, STATE10, NOACTION, NOSTATE, "", "", NULL},
         {A_ASSOCIATE_REQ_LOCAL_USER, STATE11, NOACTION, NOSTATE, "", "", NULL},
         {A_ASSOCIATE_REQ_LOCAL_USER, STATE12, NOACTION, NOSTATE, "", "", NULL},
-    {A_ASSOCIATE_REQ_LOCAL_USER, STATE13, NOACTION, NOSTATE, "", "", NULL}},
+        {A_ASSOCIATE_REQ_LOCAL_USER, STATE13, NOACTION, NOSTATE, "", "", NULL}},
 
     {
         {TRANS_CONN_CONFIRM_LOCAL_USER, STATE1, NOACTION, NOSTATE, "", "", NULL},
@@ -378,7 +389,7 @@ static FSM_ENTRY StateTable[DUL_NUMBER_OF_EVENTS][DUL_NUMBER_OF_STATES] = {
         {TRANS_CONN_CONFIRM_LOCAL_USER, STATE10, NOACTION, NOSTATE, "", "", NULL},
         {TRANS_CONN_CONFIRM_LOCAL_USER, STATE11, NOACTION, NOSTATE, "", "", NULL},
         {TRANS_CONN_CONFIRM_LOCAL_USER, STATE12, NOACTION, NOSTATE, "", "", NULL},
-    {TRANS_CONN_CONFIRM_LOCAL_USER, STATE13, NOACTION, NOSTATE, "", "", NULL}},
+        {TRANS_CONN_CONFIRM_LOCAL_USER, STATE13, NOACTION, NOSTATE, "", "", NULL}},
 
     {
         {A_ASSOCIATE_AC_PDU_RCV, STATE1, NOACTION, NOSTATE, "", "", NULL},
@@ -393,7 +404,7 @@ static FSM_ENTRY StateTable[DUL_NUMBER_OF_EVENTS][DUL_NUMBER_OF_STATES] = {
         {A_ASSOCIATE_AC_PDU_RCV, STATE10, AA_8, STATE13, "", "", NULL},
         {A_ASSOCIATE_AC_PDU_RCV, STATE11, AA_8, STATE13, "", "", NULL},
         {A_ASSOCIATE_AC_PDU_RCV, STATE12, AA_8, STATE13, "", "", NULL},
-    {A_ASSOCIATE_AC_PDU_RCV, STATE13, AA_6, STATE13, "", "", NULL}},
+        {A_ASSOCIATE_AC_PDU_RCV, STATE13, AA_6, STATE13, "", "", NULL}},
 
     {
         {A_ASSOCIATE_RJ_PDU_RCV, STATE1, NOACTION, NOSTATE, "", "", NULL},
@@ -408,7 +419,7 @@ static FSM_ENTRY StateTable[DUL_NUMBER_OF_EVENTS][DUL_NUMBER_OF_STATES] = {
         {A_ASSOCIATE_RJ_PDU_RCV, STATE10, AA_8, STATE13, "", "", NULL},
         {A_ASSOCIATE_RJ_PDU_RCV, STATE11, AA_8, STATE13, "", "", NULL},
         {A_ASSOCIATE_RJ_PDU_RCV, STATE12, AA_8, STATE13, "", "", NULL},
-    {A_ASSOCIATE_RJ_PDU_RCV, STATE13, AA_6, STATE13, "", "", NULL}},
+        {A_ASSOCIATE_RJ_PDU_RCV, STATE13, AA_6, STATE13, "", "", NULL}},
 
     {
         {TRANS_CONN_INDICATION, STATE1, AE_5, STATE2, "", "", NULL},
@@ -423,7 +434,7 @@ static FSM_ENTRY StateTable[DUL_NUMBER_OF_EVENTS][DUL_NUMBER_OF_STATES] = {
         {TRANS_CONN_INDICATION, STATE10, NOACTION, NOSTATE, "", "", NULL},
         {TRANS_CONN_INDICATION, STATE11, NOACTION, NOSTATE, "", "", NULL},
         {TRANS_CONN_INDICATION, STATE12, NOACTION, NOSTATE, "", "", NULL},
-    {TRANS_CONN_INDICATION, STATE13, NOACTION, NOSTATE, "", "", NULL}},
+        {TRANS_CONN_INDICATION, STATE13, NOACTION, NOSTATE, "", "", NULL}},
 
     {
         {A_ASSOCIATE_RQ_PDU_RCV, STATE1, NOACTION, NOSTATE, "", "", NULL},
@@ -438,7 +449,7 @@ static FSM_ENTRY StateTable[DUL_NUMBER_OF_EVENTS][DUL_NUMBER_OF_STATES] = {
         {A_ASSOCIATE_RQ_PDU_RCV, STATE10, AA_8, STATE13, "", "", NULL},
         {A_ASSOCIATE_RQ_PDU_RCV, STATE11, AA_8, STATE13, "", "", NULL},
         {A_ASSOCIATE_RQ_PDU_RCV, STATE12, AA_8, STATE13, "", "", NULL},
-    {A_ASSOCIATE_RQ_PDU_RCV, STATE13, AA_7, STATE13, "", "", NULL}},
+        {A_ASSOCIATE_RQ_PDU_RCV, STATE13, AA_7, STATE13, "", "", NULL}},
 
     {
         {A_ASSOCIATE_RESPONSE_ACCEPT, STATE1, NOACTION, NOSTATE, "", "", NULL},
@@ -453,7 +464,7 @@ static FSM_ENTRY StateTable[DUL_NUMBER_OF_EVENTS][DUL_NUMBER_OF_STATES] = {
         {A_ASSOCIATE_RESPONSE_ACCEPT, STATE10, NOACTION, NOSTATE, "", "", NULL},
         {A_ASSOCIATE_RESPONSE_ACCEPT, STATE11, NOACTION, NOSTATE, "", "", NULL},
         {A_ASSOCIATE_RESPONSE_ACCEPT, STATE12, NOACTION, NOSTATE, "", "", NULL},
-    {A_ASSOCIATE_RESPONSE_ACCEPT, STATE13, NOACTION, NOSTATE, "", "", NULL}},
+        {A_ASSOCIATE_RESPONSE_ACCEPT, STATE13, NOACTION, NOSTATE, "", "", NULL}},
 
     {
         {A_ASSOCIATE_RESPONSE_REJECT, STATE1, NOACTION, NOSTATE, "", "", NULL},
@@ -468,7 +479,7 @@ static FSM_ENTRY StateTable[DUL_NUMBER_OF_EVENTS][DUL_NUMBER_OF_STATES] = {
         {A_ASSOCIATE_RESPONSE_REJECT, STATE10, NOACTION, NOSTATE, "", "", NULL},
         {A_ASSOCIATE_RESPONSE_REJECT, STATE11, NOACTION, NOSTATE, "", "", NULL},
         {A_ASSOCIATE_RESPONSE_REJECT, STATE12, NOACTION, NOSTATE, "", "", NULL},
-    {A_ASSOCIATE_RESPONSE_REJECT, STATE13, NOACTION, NOSTATE, "", "", NULL}},
+        {A_ASSOCIATE_RESPONSE_REJECT, STATE13, NOACTION, NOSTATE, "", "", NULL}},
 
     {
         {P_DATA_REQ, STATE1, NOACTION, NOSTATE, "", "", NULL},
@@ -483,7 +494,7 @@ static FSM_ENTRY StateTable[DUL_NUMBER_OF_EVENTS][DUL_NUMBER_OF_STATES] = {
         {P_DATA_REQ, STATE10, NOACTION, NOSTATE, "", "", NULL},
         {P_DATA_REQ, STATE11, NOACTION, NOSTATE, "", "", NULL},
         {P_DATA_REQ, STATE12, NOACTION, NOSTATE, "", "", NULL},
-    {P_DATA_REQ, STATE13, NOACTION, NOSTATE, "", "", NULL}},
+        {P_DATA_REQ, STATE13, NOACTION, NOSTATE, "", "", NULL}},
 
     {
         {P_DATA_TF_PDU_RCV, STATE1, NOACTION, NOSTATE, "", "", NULL},
@@ -498,7 +509,7 @@ static FSM_ENTRY StateTable[DUL_NUMBER_OF_EVENTS][DUL_NUMBER_OF_STATES] = {
         {P_DATA_TF_PDU_RCV, STATE10, AA_8, STATE13, "", "", NULL},
         {P_DATA_TF_PDU_RCV, STATE11, AA_8, STATE13, "", "", NULL},
         {P_DATA_TF_PDU_RCV, STATE12, AA_8, STATE13, "", "", NULL},
-    {P_DATA_TF_PDU_RCV, STATE13, AA_6, STATE13, "", "", NULL}},
+        {P_DATA_TF_PDU_RCV, STATE13, AA_6, STATE13, "", "", NULL}},
 
     {
         {A_RELEASE_REQ, STATE1, NOACTION, NOSTATE, "", "", NULL},
@@ -513,7 +524,7 @@ static FSM_ENTRY StateTable[DUL_NUMBER_OF_EVENTS][DUL_NUMBER_OF_STATES] = {
         {A_RELEASE_REQ, STATE10, NOACTION, NOSTATE, "", "", NULL},
         {A_RELEASE_REQ, STATE11, NOACTION, NOSTATE, "", "", NULL},
         {A_RELEASE_REQ, STATE12, NOACTION, NOSTATE, "", "", NULL},
-    {A_RELEASE_REQ, STATE13, NOACTION, NOSTATE, "", "", NULL}},
+        {A_RELEASE_REQ, STATE13, NOACTION, NOSTATE, "", "", NULL}},
 
     {
         {A_RELEASE_RQ_PDU_RCV, STATE1, NOACTION, NOSTATE, "", "", NULL},
@@ -528,7 +539,7 @@ static FSM_ENTRY StateTable[DUL_NUMBER_OF_EVENTS][DUL_NUMBER_OF_STATES] = {
         {A_RELEASE_RQ_PDU_RCV, STATE10, AA_8, STATE13, "", "", NULL},
         {A_RELEASE_RQ_PDU_RCV, STATE11, AA_8, STATE13, "", "", NULL},
         {A_RELEASE_RQ_PDU_RCV, STATE12, AA_8, STATE13, "", "", NULL},
-    {A_RELEASE_RQ_PDU_RCV, STATE13, AA_6, STATE13, "", "", NULL}},
+        {A_RELEASE_RQ_PDU_RCV, STATE13, AA_6, STATE13, "", "", NULL}},
 
     {
         {A_RELEASE_RP_PDU_RCV, STATE1, NOACTION, NOSTATE, "", "", NULL},
@@ -543,7 +554,7 @@ static FSM_ENTRY StateTable[DUL_NUMBER_OF_EVENTS][DUL_NUMBER_OF_STATES] = {
         {A_RELEASE_RP_PDU_RCV, STATE10, AR_10, STATE12, "", "", NULL},
         {A_RELEASE_RP_PDU_RCV, STATE11, AR_3, STATE1, "", "", NULL},
         {A_RELEASE_RP_PDU_RCV, STATE12, AA_8, STATE13, "", "", NULL},
-    {A_RELEASE_RP_PDU_RCV, STATE13, AA_6, STATE13, "", "", NULL}},
+        {A_RELEASE_RP_PDU_RCV, STATE13, AA_6, STATE13, "", "", NULL}},
 
     {
         {A_RELEASE_RESP, STATE1, NOACTION, NOSTATE, "", "", NULL},
@@ -558,7 +569,7 @@ static FSM_ENTRY StateTable[DUL_NUMBER_OF_EVENTS][DUL_NUMBER_OF_STATES] = {
         {A_RELEASE_RESP, STATE10, NOACTION, NOSTATE, "", "", NULL},
         {A_RELEASE_RESP, STATE11, NOACTION, NOSTATE, "", "", NULL},
         {A_RELEASE_RESP, STATE12, AR_4, STATE13, "", "", NULL},
-    {A_RELEASE_RESP, STATE13, NOACTION, NOSTATE, "", "", NULL}},
+        {A_RELEASE_RESP, STATE13, NOACTION, NOSTATE, "", "", NULL}},
 
     {
         {A_ABORT_REQ, STATE1, NOACTION, NOSTATE, "", "", NULL},
@@ -573,7 +584,7 @@ static FSM_ENTRY StateTable[DUL_NUMBER_OF_EVENTS][DUL_NUMBER_OF_STATES] = {
         {A_ABORT_REQ, STATE10, AA_1, STATE13, "", "", NULL},
         {A_ABORT_REQ, STATE11, AA_1, STATE13, "", "", NULL},
         {A_ABORT_REQ, STATE12, AA_1, STATE13, "", "", NULL},
-    {A_ABORT_REQ, STATE13, NOACTION, NOSTATE, "", "", NULL}},
+        {A_ABORT_REQ, STATE13, NOACTION, NOSTATE, "", "", NULL}},
 
     {
         {A_ABORT_PDU_RCV, STATE1, NOACTION, NOSTATE, "", "", NULL},
@@ -588,7 +599,7 @@ static FSM_ENTRY StateTable[DUL_NUMBER_OF_EVENTS][DUL_NUMBER_OF_STATES] = {
         {A_ABORT_PDU_RCV, STATE10, AA_3, STATE1, "", "", NULL},
         {A_ABORT_PDU_RCV, STATE11, AA_3, STATE1, "", "", NULL},
         {A_ABORT_PDU_RCV, STATE12, AA_3, STATE1, "", "", NULL},
-    {A_ABORT_PDU_RCV, STATE13, AA_2, STATE1, "", "", NULL}},
+        {A_ABORT_PDU_RCV, STATE13, AA_2, STATE1, "", "", NULL}},
 
     {
         {TRANS_CONN_CLOSED, STATE1, NOACTION, NOSTATE, "", "", NULL},
@@ -603,25 +614,36 @@ static FSM_ENTRY StateTable[DUL_NUMBER_OF_EVENTS][DUL_NUMBER_OF_STATES] = {
         {TRANS_CONN_CLOSED, STATE10, AA_4, STATE1, "", "", NULL},
         {TRANS_CONN_CLOSED, STATE11, AA_4, STATE1, "", "", NULL},
         {TRANS_CONN_CLOSED, STATE12, AA_4, STATE1, "", "", NULL},
-    {TRANS_CONN_CLOSED, STATE13, AR_5, STATE1, "", "", NULL}},
+        {TRANS_CONN_CLOSED, STATE13, AR_5, STATE1, "", "", NULL}},
 
     {
         {ARTIM_TIMER_EXPIRED, STATE1, NOACTION, NOSTATE, "", "", NULL},
         {ARTIM_TIMER_EXPIRED, STATE2, AA_2T, STATE1, "", "", NULL},
         {ARTIM_TIMER_EXPIRED, STATE3, NOACTION, NOSTATE, "", "", NULL},
         {ARTIM_TIMER_EXPIRED, STATE4, NOACTION, NOSTATE, "", "", NULL},
-        {ARTIM_TIMER_EXPIRED, STATE5, NOACTION, NOSTATE, "", "", NULL},
+
+        // DICOM part 8 does not define an action and state for the
+        // situation where a timeout occurs while we are waiting for an
+        // incoming A-ASSOCIATE-AC or A-ASSOCIATE-RJ. We close the transport
+        // connection, return an error code indicating a timout,
+        // and reset the FSM to idle state (STATE1).
+        {ARTIM_TIMER_EXPIRED, STATE5, AA_2T, STATE1, "", "", NULL},
+
         {ARTIM_TIMER_EXPIRED, STATE6, NOACTION, NOSTATE, "", "", NULL},
-/* This next line is not per the standard.  We added a timeout action
-** in this state.
-*/
+
+        // DICOM part 8 does not define an action and state for the
+        // situation where a timeout occurs while we are waiting for an
+        // incoming A-RELEASE-RSP. We close the transport
+        // connection, return an error code indicating a timout,
+        // and reset the FSM to idle state (STATE1).
         {ARTIM_TIMER_EXPIRED, STATE7, AA_2T, STATE1, "", "", NULL},
+
         {ARTIM_TIMER_EXPIRED, STATE8, NOACTION, NOSTATE, "", "", NULL},
         {ARTIM_TIMER_EXPIRED, STATE9, NOACTION, NOSTATE, "", "", NULL},
         {ARTIM_TIMER_EXPIRED, STATE10, NOACTION, NOSTATE, "", "", NULL},
         {ARTIM_TIMER_EXPIRED, STATE11, NOACTION, NOSTATE, "", "", NULL},
         {ARTIM_TIMER_EXPIRED, STATE12, NOACTION, NOSTATE, "", "", NULL},
-    {ARTIM_TIMER_EXPIRED, STATE13, AA_2, STATE1, "", "", NULL}},
+        {ARTIM_TIMER_EXPIRED, STATE13, AA_2, STATE1, "", "", NULL}},
 
     {
         {INVALID_PDU, STATE1, NOACTION, NOSTATE, "", "", NULL},
@@ -636,7 +658,7 @@ static FSM_ENTRY StateTable[DUL_NUMBER_OF_EVENTS][DUL_NUMBER_OF_STATES] = {
         {INVALID_PDU, STATE10, AA_8, STATE13, "", "", NULL},
         {INVALID_PDU, STATE11, AA_8, STATE13, "", "", NULL},
         {INVALID_PDU, STATE12, AA_8, STATE13, "", "", NULL},
-    {INVALID_PDU, STATE13, AA_7, STATE13, "", "", NULL}}
+        {INVALID_PDU, STATE13, AA_7, STATE13, "", "", NULL}}
 };
 
 
@@ -2183,7 +2205,11 @@ requestAssociationTCP(PRIVATE_NETWORKKEY ** network,
     int  port;
     struct sockaddr_in server;
     OFStandard::OFHostent hp;
+#ifdef _WIN32
+    SOCKET s;
+#else
     int s;
+#endif
     struct linger sockarg;
 
     if (sscanf(params->calledPresentationAddress, "%[^:]:%d", node, &port) != 2)
@@ -2194,7 +2220,11 @@ requestAssociationTCP(PRIVATE_NETWORKKEY ** network,
     }
 
     s = socket(AF_INET, SOCK_STREAM, 0);
+#ifdef _WIN32
+    if (s == INVALID_SOCKET)
+#else
     if (s < 0)
+#endif
     {
       char buf[256];
       OFString msg = "TCP Initialization Error: ";
@@ -2273,7 +2303,8 @@ requestAssociationTCP(PRIVATE_NETWORKKEY ** network,
         timeout.tv_usec = 0;
 
         do {
-            rc = select(s + 1, NULL, &fdSet, NULL, &timeout);
+            // the typecast is safe because Windows ignores the first select() parameter anyway
+            rc = select(OFstatic_cast(int, s + 1), NULL, &fdSet, NULL, &timeout);
         } while (rc == -1 && errno == EINTR);
 
         if (DCM_dcmnetLogger.isEnabledFor(OFLogger::DEBUG_LOG_LEVEL))
@@ -3738,8 +3769,13 @@ dump_pdu(const char *type, void *buffer, unsigned long length)
 ** Algorithm:
 **      Description of the algorithm (optional) and any other notes.
 */
-static void
-setTCPBufferLength(int sock)
+
+#ifdef _WIN32
+static void setTCPBufferLength(SOCKET sock)
+#else
+static void setTCPBufferLength(int sock)
+#endif
+
 {
     char *TCPBufferLength;
     int bufLen;

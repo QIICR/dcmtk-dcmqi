@@ -27,11 +27,6 @@
 #define INCLUDE_CSTDARG
 #define INCLUDE_CERRNO
 #include "dcmtk/ofstd/ofstdinc.h"
-
-#ifdef HAVE_GUSI_H
-#include <GUSI.h>
-#endif
-
 #include "dcmtk/ofstd/ofstd.h"
 #include "dcmtk/ofstd/ofconapp.h"
 #include "dcmtk/dcmnet/dicom.h"
@@ -233,28 +228,16 @@ addPresentationContext(T_ASC_Parameters *params,
 int
 main(int argc, char *argv[])
 {
-    T_ASC_Parameters *params = NULL;
-    const char *opt_peer;
-    OFCmdUnsignedInt opt_port = 104;
-    DIC_NODENAME localHost;
-    DIC_NODENAME peerHost;
-    T_ASC_Association *assoc = NULL;
-    const char *opt_peerTitle = PEERAPPLICATIONTITLE;
-    const char *opt_ourTitle = APPLICATIONTITLE;
-    OFList<OFString> fileNameList;
+  T_ASC_Parameters *params = NULL;
+  const char *opt_peer;
+  OFCmdUnsignedInt opt_port = 104;
+  DIC_NODENAME peerHost;
+  T_ASC_Association *assoc = NULL;
+  const char *opt_peerTitle = PEERAPPLICATIONTITLE;
+  const char *opt_ourTitle = APPLICATIONTITLE;
+  OFList<OFString> fileNameList;
 
-#ifdef HAVE_GUSI_H
-    /* needed for Macintosh */
-    GUSISetup(GUSIwithSIOUXSockets);
-    GUSISetup(GUSIwithInternetSockets);
-#endif
-
-#ifdef HAVE_WINSOCK_H
-    WSAData winSockData;
-    /* we need at least version 1.1 */
-    WORD winSockVersionNeeded = MAKEWORD( 1, 1 );
-    WSAStartup(winSockVersionNeeded, &winSockData);
-#endif
+  OFStandard::initializeNetwork();
 
   char tempstr[20];
   OFString temp_str;
@@ -311,6 +294,8 @@ main(int argc, char *argv[])
       cmd.addOption("--prefer-mpeg4-2-2d",   "+x2",     "prefer MPEG4 AVC/H.264 HP / Level 4.2 TS (2D)");
       cmd.addOption("--prefer-mpeg4-2-3d",   "+x3",     "prefer MPEG4 AVC/H.264 HP / Level 4.2 TS (3D)");
       cmd.addOption("--prefer-mpeg4-2-st",   "+xo",     "prefer MPEG4 AVC/H.264 Stereo HP / Level 4.2 TS");
+      cmd.addOption("--prefer-hevc",         "+x4",     "prefer HEVC/H.265 Main Profile / Level 5.1 TS");
+      cmd.addOption("--prefer-hevc10",       "+x5",     "prefer HEVC/H.265 Main 10 Profile / Level 5.1 TS");
       cmd.addOption("--prefer-rle",          "+xr",     "prefer RLE lossless TS");
 #ifdef WITH_ZLIB
       cmd.addOption("--prefer-deflated",     "+xd",     "prefer deflated explicit VR little endian TS");
@@ -472,6 +457,8 @@ main(int argc, char *argv[])
       if (cmd.findOption("--prefer-mpeg4-2-2d")) opt_in_networkTransferSyntax = EXS_MPEG4HighProfileLevel4_2_For2DVideo;
       if (cmd.findOption("--prefer-mpeg4-2-3d")) opt_in_networkTransferSyntax = EXS_MPEG4HighProfileLevel4_2_For3DVideo;
       if (cmd.findOption("--prefer-mpeg4-2-st")) opt_in_networkTransferSyntax = EXS_MPEG4StereoHighProfileLevel4_2;
+      if (cmd.findOption("--prefer-hevc")) opt_in_networkTransferSyntax = EXS_HEVCMainProfileLevel5_1;
+      if (cmd.findOption("--prefer-hevc10")) opt_in_networkTransferSyntax = EXS_HEVCMain10ProfileLevel5_1;
       if (cmd.findOption("--prefer-rle")) opt_in_networkTransferSyntax = EXS_RLELossless;
 #ifdef WITH_ZLIB
       if (cmd.findOption("--prefer-deflated")) opt_in_networkTransferSyntax = EXS_DeflatedLittleEndianExplicit;
@@ -574,6 +561,8 @@ main(int argc, char *argv[])
         app.checkConflict("--write-xfer-little", "--prefer-mpeg4-2-2d", opt_in_networkTransferSyntax == EXS_MPEG4HighProfileLevel4_2_For2DVideo);
         app.checkConflict("--write-xfer-little", "--prefer-mpeg4-2-3d", opt_in_networkTransferSyntax == EXS_MPEG4HighProfileLevel4_2_For3DVideo);
         app.checkConflict("--write-xfer-little", "--prefer-mpeg4-2-st", opt_in_networkTransferSyntax == EXS_MPEG4StereoHighProfileLevel4_2);
+        app.checkConflict("--write-xfer-little", "--prefer-hevc", opt_in_networkTransferSyntax == EXS_HEVCMainProfileLevel5_1);
+        app.checkConflict("--write-xfer-little", "--prefer-hevc10", opt_in_networkTransferSyntax == EXS_HEVCMain10ProfileLevel5_1);
         app.checkConflict("--write-xfer-little", "--prefer-rle", opt_in_networkTransferSyntax == EXS_RLELossless);
         // we don't have to check a conflict for --prefer-deflated because we can always convert that to uncompressed.
         opt_writeTransferSyntax = EXS_LittleEndianExplicit;
@@ -596,6 +585,8 @@ main(int argc, char *argv[])
         app.checkConflict("--write-xfer-big", "--prefer-mpeg4-2-2d", opt_in_networkTransferSyntax == EXS_MPEG4HighProfileLevel4_2_For2DVideo);
         app.checkConflict("--write-xfer-big", "--prefer-mpeg4-2-3d", opt_in_networkTransferSyntax == EXS_MPEG4HighProfileLevel4_2_For3DVideo);
         app.checkConflict("--write-xfer-big", "--prefer-mpeg4-2-st", opt_in_networkTransferSyntax == EXS_MPEG4StereoHighProfileLevel4_2);
+        app.checkConflict("--write-xfer-big", "--prefer-hevc", opt_in_networkTransferSyntax == EXS_HEVCMainProfileLevel5_1);
+        app.checkConflict("--write-xfer-big", "--prefer-hevc10", opt_in_networkTransferSyntax == EXS_HEVCMain10ProfileLevel5_1);
         app.checkConflict("--write-xfer-big", "--prefer-rle", opt_in_networkTransferSyntax == EXS_RLELossless);
         // we don't have to check a conflict for --prefer-deflated because we can always convert that to uncompressed.
         opt_writeTransferSyntax = EXS_BigEndianExplicit;
@@ -618,6 +609,8 @@ main(int argc, char *argv[])
         app.checkConflict("--write-xfer-implicit", "--prefer-mpeg4-2-2d", opt_in_networkTransferSyntax == EXS_MPEG4HighProfileLevel4_2_For2DVideo);
         app.checkConflict("--write-xfer-implicit", "--prefer-mpeg4-2-3d", opt_in_networkTransferSyntax == EXS_MPEG4HighProfileLevel4_2_For3DVideo);
         app.checkConflict("--write-xfer-implicit", "--prefer-mpeg4-2-st", opt_in_networkTransferSyntax == EXS_MPEG4StereoHighProfileLevel4_2);
+        app.checkConflict("--write-xfer-implicit", "--prefer-hevc", opt_in_networkTransferSyntax == EXS_HEVCMainProfileLevel5_1);
+        app.checkConflict("--write-xfer-implicit", "--prefer-hevc10", opt_in_networkTransferSyntax == EXS_HEVCMain10ProfileLevel5_1);
         app.checkConflict("--write-xfer-implicit", "--prefer-rle", opt_in_networkTransferSyntax == EXS_RLELossless);
         // we don't have to check a conflict for --prefer-deflated because we can always convert that to uncompressed.
         opt_writeTransferSyntax = EXS_LittleEndianImplicit;
@@ -641,6 +634,8 @@ main(int argc, char *argv[])
         app.checkConflict("--write-xfer-deflated", "--prefer-mpeg4-2-2d", opt_in_networkTransferSyntax == EXS_MPEG4HighProfileLevel4_2_For2DVideo);
         app.checkConflict("--write-xfer-deflated", "--prefer-mpeg4-2-3d", opt_in_networkTransferSyntax == EXS_MPEG4HighProfileLevel4_2_For3DVideo);
         app.checkConflict("--write-xfer-deflated", "--prefer-mpeg4-2-st", opt_in_networkTransferSyntax == EXS_MPEG4StereoHighProfileLevel4_2);
+        app.checkConflict("--write-xfer-deflated", "--prefer-hevc", opt_in_networkTransferSyntax == EXS_HEVCMainProfileLevel5_1);
+        app.checkConflict("--write-xfer-deflated", "--prefer-hevc10", opt_in_networkTransferSyntax == EXS_HEVCMain10ProfileLevel5_1);
         app.checkConflict("--write-xfer-deflated", "--prefer-rle", opt_in_networkTransferSyntax == EXS_RLELossless);
         opt_writeTransferSyntax = EXS_DeflatedLittleEndianExplicit;
       }
@@ -800,9 +795,8 @@ main(int argc, char *argv[])
     }
     ASC_setAPTitles(params, opt_ourTitle, opt_peerTitle, NULL);
 
-    gethostname(localHost, sizeof(localHost) - 1);
     sprintf(peerHost, "%s:%d", opt_peer, OFstatic_cast(int, opt_port));
-    ASC_setPresentationAddresses(params, localHost, peerHost);
+    ASC_setPresentationAddresses(params, OFStandard::getHostName().c_str(), peerHost);
 
     /*
      * We also add a presentation context for the corresponding
@@ -921,9 +915,7 @@ main(int argc, char *argv[])
         exit(EXITCODE_CANNOT_CLOSE_ASSOCIATION);
     }
 
-#ifdef HAVE_WINSOCK_H
-    WSACleanup();
-#endif
+    OFStandard::shutdownNetwork();
 
     return cmove_status_code;
 }
@@ -1150,6 +1142,22 @@ acceptSubAssoc(T_ASC_Network *aNet, T_ASC_Association **assoc)
         case EXS_MPEG4StereoHighProfileLevel4_2:
           /* we prefer MPEG4 Stereo HP/L4.2 */
           transferSyntaxes[0] = UID_MPEG4StereoHighProfileLevel4_2TransferSyntax;
+          transferSyntaxes[1] = UID_LittleEndianExplicitTransferSyntax;
+          transferSyntaxes[2] = UID_BigEndianExplicitTransferSyntax;
+          transferSyntaxes[3] = UID_LittleEndianImplicitTransferSyntax;
+          numTransferSyntaxes = 4;
+          break;
+        case EXS_HEVCMainProfileLevel5_1:
+          /* we prefer HEVC/H.265 Main Profile/L5.1 */
+          transferSyntaxes[0] = UID_HEVCMainProfileLevel5_1TransferSyntax;
+          transferSyntaxes[1] = UID_LittleEndianExplicitTransferSyntax;
+          transferSyntaxes[2] = UID_BigEndianExplicitTransferSyntax;
+          transferSyntaxes[3] = UID_LittleEndianImplicitTransferSyntax;
+          numTransferSyntaxes = 4;
+          break;
+        case EXS_HEVCMain10ProfileLevel5_1:
+          /* we prefer HEVC/H.265 Main 10 Profile/L5.1 */
+          transferSyntaxes[0] = UID_HEVCMain10ProfileLevel5_1TransferSyntax;
           transferSyntaxes[1] = UID_LittleEndianExplicitTransferSyntax;
           transferSyntaxes[2] = UID_BigEndianExplicitTransferSyntax;
           transferSyntaxes[3] = UID_LittleEndianImplicitTransferSyntax;

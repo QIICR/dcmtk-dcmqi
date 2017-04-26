@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1993-2014, OFFIS e.V.
+ *  Copyright (C) 1993-2017, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -94,18 +94,7 @@ int main( int argc, char *argv[] )
   char tempstr[20];
   OFString temp_str;
 
-#ifdef HAVE_GUSI_H
-  // needed for Macintosh
-  GUSISetup( GUSIwithSIOUXSockets );
-  GUSISetup( GUSIwithInternetSockets );
-#endif
-
-#ifdef HAVE_WINSOCK_H
-  WSAData winSockData;
-  // we need at least version 1.1
-  WORD winSockVersionNeeded = MAKEWORD( 1, 1 );
-  WSAStartup( winSockVersionNeeded, &winSockData );
-#endif
+  OFStandard::initializeNetwork();
 
   // initialize conf structure
   conf.setAETitle(APPLICATIONTITLE);
@@ -390,9 +379,7 @@ int main( int argc, char *argv[] )
     returnValue = 1;
   }
 
-#ifdef HAVE_WINSOCK_H
-  WSACleanup();
-#endif
+  OFStandard::shutdownNetwork();
 
   // return result
   return( returnValue );

@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 2000-2014, OFFIS e.V.
+ *  Copyright (C) 2000-2017, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -20,10 +20,6 @@
  */
 
 #include "dcmtk/config/osconfig.h"    /* make sure OS specific configuration is included first */
-
-#ifdef HAVE_GUSI_H
-#include <GUSI.h>
-#endif
 
 BEGIN_EXTERN_C
 #ifdef HAVE_FCNTL_H
@@ -108,18 +104,7 @@ static void cleanChildren()
 
 int main(int argc, char *argv[])
 {
-
-#ifdef HAVE_GUSI_H
-    GUSISetup(GUSIwithSIOUXSockets);
-    GUSISetup(GUSIwithInternetSockets);
-#endif
-
-#ifdef HAVE_WINSOCK_H
-    WSAData winSockData;
-    /* we need at least version 1.1 */
-    WORD winSockVersionNeeded = MAKEWORD( 1, 1 );
-    WSAStartup(winSockVersionNeeded, &winSockData);
-#endif
+    OFStandard::initializeNetwork();
 
     dcmDisableGethostbyaddr.set(OFTrue);  // disable hostname lookup
 
@@ -246,11 +231,11 @@ int main(int argc, char *argv[])
       OFString logfilename = logfileprefix;
       logfilename += ".log";
 
-      OFauto_ptr<dcmtk::log4cplus::Layout> layout(new dcmtk::log4cplus::PatternLayout(pattern));
+      OFunique_ptr<dcmtk::log4cplus::Layout> layout(new dcmtk::log4cplus::PatternLayout(pattern));
       dcmtk::log4cplus::SharedAppenderPtr logfile(new dcmtk::log4cplus::FileAppender(logfilename));
       dcmtk::log4cplus::Logger log = dcmtk::log4cplus::Logger::getRoot();
 
-      logfile->setLayout(layout);
+      logfile->setLayout(OFmove(layout));
       log.removeAllAppenders();
       log.addAppender(logfile);
     }
@@ -515,9 +500,7 @@ int main(int argc, char *argv[])
     } // finished
     cleanChildren();
 
-#ifdef HAVE_WINSOCK_H
-    WSACleanup();
-#endif
+    OFStandard::shutdownNetwork();
 
 #ifdef DEBUG
     dcmDataDict.clear();  /* useful for debugging with dmalloc */

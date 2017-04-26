@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1998-2010, OFFIS e.V.
+ *  Copyright (C) 1998-2017, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -21,6 +21,7 @@
  */
 
 #include "dcmtk/config/osconfig.h"    /* make sure OS specific configuration is included first */
+
 #include "dcmtk/ofstd/ofstring.h"
 #include "dcmtk/dcmpstat/dvpsdef.h"
 #include "dcmtk/dcmpstat/dvpspr.h"
@@ -482,7 +483,6 @@ OFCondition DVPSPrintMessageHandler::negotiateAssociation(
   }
   
   T_ASC_Parameters *params=NULL;
-  DIC_NODENAME dnlocalHost;
   DIC_NODENAME dnpeerHost;
 
   OFCondition cond = ASC_initializeNetwork(NET_REQUESTOR, 0, 30, &net);
@@ -497,9 +497,8 @@ OFCondition DVPSPrintMessageHandler::negotiateAssociation(
   if (cond.bad()) return cond;
 
   ASC_setAPTitles(params, myAEtitle, peerAEtitle, NULL);
-  gethostname(dnlocalHost, sizeof(dnlocalHost) - 1);
   sprintf(dnpeerHost, "%s:%d", peerHost, peerPort);
-  ASC_setPresentationAddresses(params, dnlocalHost, dnpeerHost);
+  ASC_setPresentationAddresses(params, OFStandard::getHostName().c_str(), dnpeerHost);
 
   /* presentation contexts */
   const char* transferSyntaxes[3];

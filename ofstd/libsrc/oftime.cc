@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 2002-2015, OFFIS e.V.
+ *  Copyright (C) 2002-2017, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -41,6 +41,7 @@ BEGIN_EXTERN_C
 END_EXTERN_C
 
 #ifdef HAVE_WINDOWS_H
+#define WIN32_LEAN_AND_MEAN
 #include <windows.h>      /* for Windows time functions */
 #endif
 
@@ -391,7 +392,7 @@ OFBool OFTime::setISOFormattedTime(const OFString &formattedTime)
         int tzHours;
         unsigned int tzMinutes;
         /* extract "HH", "MM", "SS" and "&ZZZZ" components from time string */
-        if (sscanf(formattedTime.c_str(), "%02u%02u%02u%03i%02u", &hours, &minutes, &seconds, &tzHours, &tzMinutes) == 5)
+        if (sscanf(formattedTime.c_str(), "%02u%02u%02u%03d%02u", &hours, &minutes, &seconds, &tzHours, &tzMinutes) == 5)
         {
             const double timeZone = (tzHours < 0) ? tzHours - OFstatic_cast(double, tzMinutes) / 60
                                                   : tzHours + OFstatic_cast(double, tzMinutes) / 60;
@@ -413,7 +414,7 @@ OFBool OFTime::setISOFormattedTime(const OFString &formattedTime)
                 /* and finally, extract the time zone component from the time string */
                 int tzHours;
                 unsigned int tzMinutes;
-                if (sscanf(formattedTime.c_str() + pos - 1, "%03i%*c%02u", &tzHours, &tzMinutes) == 2)
+                if (sscanf(formattedTime.c_str() + pos - 1, "%03d%*c%02u", &tzHours, &tzMinutes) == 2)
                 {
                     const double timeZone = (tzHours < 0) ? tzHours - OFstatic_cast(double, tzMinutes) / 60
                                                           : tzHours + OFstatic_cast(double, tzMinutes) / 60;

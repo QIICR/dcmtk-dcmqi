@@ -33,10 +33,6 @@ BEGIN_EXTERN_C
 #endif
 END_EXTERN_C
 
-#ifdef HAVE_GUSI_H
-#include <GUSI.h>
-#endif
-
 #include "dcmtk/ofstd/ofstd.h"
 #include "dcmtk/ofstd/ofconapp.h"
 #include "dcmtk/ofstd/ofstring.h"
@@ -195,22 +191,11 @@ int main(int argc, char *argv[])
 
   T_ASC_Network *net;
   T_ASC_Parameters *params;
-  DIC_NODENAME localHost;
   DIC_NODENAME peerHost;
   T_ASC_Association *assoc;
   DcmAssociationConfiguration asccfg;  // handler for association configuration profiles
 
-#ifdef HAVE_GUSI_H
-  GUSISetup(GUSIwithSIOUXSockets);
-  GUSISetup(GUSIwithInternetSockets);
-#endif
-
-#ifdef HAVE_WINSOCK_H
-  WSAData winSockData;
-  /* we need at least version 1.1 */
-  WORD winSockVersionNeeded = MAKEWORD( 1, 1 );
-  WSAStartup(winSockVersionNeeded, &winSockData);
-#endif
+  OFStandard::initializeNetwork();
 
   OFString temp_str;
   OFConsoleApplication app(OFFIS_CONSOLE_APPLICATION , "DICOM storage (C-STORE) SCU", rcsid);
@@ -267,6 +252,8 @@ int main(int argc, char *argv[])
       cmd.addOption("--propose-mpeg4-2-2d",   "-x2",     "propose MPEG4 AVC/H.264 HP / Level 4.2 TS (2D)");
       cmd.addOption("--propose-mpeg4-2-3d",   "-x3",     "propose MPEG4 AVC/H.264 HP / Level 4.2 TS (3D)");
       cmd.addOption("--propose-mpeg4-2-st",   "-xo",     "propose MPEG4 AVC/H.264 Stereo / Level 4.2 TS");
+      cmd.addOption("--propose-hevc",         "-x4",     "propose HEVC/H.265 Main Profile / Level 5.1 TS");
+      cmd.addOption("--propose-hevc10",       "-x5",     "propose HEVC/H.265 Main 10 Profile / Level 5.1 TS");
       cmd.addOption("--propose-rle",          "-xr",     "propose RLE lossless TS\nand all uncompressed transfer syntaxes");
 #ifdef WITH_ZLIB
       cmd.addOption("--propose-deflated",     "-xd",     "propose deflated expl. VR little endian TS\nand all uncompressed transfer syntaxes");
@@ -440,6 +427,8 @@ int main(int argc, char *argv[])
       if (cmd.findOption("--propose-mpeg4-2-2d")) opt_networkTransferSyntax = EXS_MPEG4HighProfileLevel4_2_For2DVideo;
       if (cmd.findOption("--propose-mpeg4-2-3d")) opt_networkTransferSyntax = EXS_MPEG4HighProfileLevel4_2_For3DVideo;
       if (cmd.findOption("--propose-mpeg4-2-st")) opt_networkTransferSyntax = EXS_MPEG4StereoHighProfileLevel4_2;
+      if (cmd.findOption("--propose-hevc")) opt_networkTransferSyntax = EXS_HEVCMainProfileLevel5_1;
+      if (cmd.findOption("--propose-hevc10")) opt_networkTransferSyntax = EXS_HEVCMain10ProfileLevel5_1;
       if (cmd.findOption("--propose-rle")) opt_networkTransferSyntax = EXS_RLELossless;
 #ifdef WITH_ZLIB
       if (cmd.findOption("--propose-deflated")) opt_networkTransferSyntax = EXS_DeflatedLittleEndianExplicit;
@@ -469,6 +458,8 @@ int main(int argc, char *argv[])
         app.checkConflict("--config-file", "--propose-mpeg4-2-2d", opt_networkTransferSyntax == EXS_MPEG4HighProfileLevel4_2_For2DVideo);
         app.checkConflict("--config-file", "--propose-mpeg4-2-3d", opt_networkTransferSyntax == EXS_MPEG4HighProfileLevel4_2_For3DVideo);
         app.checkConflict("--config-file", "--propose-mpeg4-2-st", opt_networkTransferSyntax == EXS_MPEG4StereoHighProfileLevel4_2);
+        app.checkConflict("--config-file", "--propose-hevc", opt_networkTransferSyntax == EXS_HEVCMainProfileLevel5_1);
+        app.checkConflict("--config-file", "--propose-hevc10", opt_networkTransferSyntax == EXS_HEVCMain10ProfileLevel5_1);
         app.checkConflict("--config-file", "--propose-rle", opt_networkTransferSyntax == EXS_RLELossless);
 #ifdef WITH_ZLIB
         app.checkConflict("--config-file", "--propose-deflated", opt_networkTransferSyntax == EXS_DeflatedLittleEndianExplicit);
@@ -926,9 +917,8 @@ int main(int argc, char *argv[])
 
     /* Figure out the presentation addresses and copy the */
     /* corresponding values into the association parameters.*/
-    gethostname(localHost, sizeof(localHost) - 1);
     sprintf(peerHost, "%s:%d", opt_peer, OFstatic_cast(int, opt_port));
-    ASC_setPresentationAddresses(params, localHost, peerHost);
+    ASC_setPresentationAddresses(params, OFStandard::getHostName().c_str(), peerHost);
 
     /* Configure User Identity Negotiation*/
     if (opt_identMode != ASC_USER_IDENTITY_NONE)
@@ -1086,9 +1076,7 @@ int main(int argc, char *argv[])
       return 1;
     }
 
-#ifdef HAVE_WINSOCK_H
-    WSACleanup();
-#endif
+    OFStandard::shutdownNetwork();
 
 #ifdef WITH_OPENSSL
     if (tLayer && opt_writeSeedFile)
@@ -1229,7 +1217,7 @@ addStoragePresentationContexts(T_ASC_Parameters *params,
   OFList<OFString> fallbackSyntaxes;
   // - If little endian implicit is preferred, we don't need any fallback syntaxes
   //   because it is the default transfer syntax and all applications must support it.
-  // - If MPEG2 or MPEG4 is preferred, we don't want to propose any fallback solution
+  // - If MPEG2, MPEG4 or HEVC is preferred, we don't want to propose any fallback solution
   //   because this is not required and we cannot decompress the movie anyway.
   if ((opt_networkTransferSyntax != EXS_LittleEndianImplicit) &&
       (opt_networkTransferSyntax != EXS_MPEG2MainProfileAtMainLevel) &&
@@ -1238,7 +1226,9 @@ addStoragePresentationContexts(T_ASC_Parameters *params,
       (opt_networkTransferSyntax != EXS_MPEG4BDcompatibleHighProfileLevel4_1) &&
       (opt_networkTransferSyntax != EXS_MPEG4HighProfileLevel4_2_For2DVideo) &&
       (opt_networkTransferSyntax != EXS_MPEG4HighProfileLevel4_2_For3DVideo) &&
-      (opt_networkTransferSyntax != EXS_MPEG4StereoHighProfileLevel4_2))
+      (opt_networkTransferSyntax != EXS_MPEG4StereoHighProfileLevel4_2) &&
+      (opt_networkTransferSyntax != EXS_HEVCMainProfileLevel5_1) &&
+      (opt_networkTransferSyntax != EXS_HEVCMain10ProfileLevel5_1))
   {
     fallbackSyntaxes.push_back(UID_LittleEndianExplicitTransferSyntax);
     fallbackSyntaxes.push_back(UID_BigEndianExplicitTransferSyntax);
@@ -1578,7 +1568,7 @@ storeSCU(T_ASC_Association *assoc, const char *fname)
   cond = DIMSE_storeUser(assoc, presID, &req,
     NULL, dcmff.getDataset(), progressCallback, NULL,
     opt_blockMode, opt_dimse_timeout,
-    &rsp, &statusDetail, NULL, OFStandard::getFileSize(fname));
+    &rsp, &statusDetail, NULL, OFstatic_cast(long, OFStandard::getFileSize(fname)));
 
   /*
    * If store command completed normally, with a status
