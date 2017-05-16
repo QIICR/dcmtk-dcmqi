@@ -91,7 +91,6 @@
 #define INCLUDE_CSTDLIB
 #define INCLUDE_CSTDIO
 #define INCLUDE_CSTRING
-#define INCLUDE_CERRNO
 #define INCLUDE_UNISTD
 #include "dcmtk/ofstd/ofstdinc.h"
 
@@ -145,11 +144,6 @@ int dcmtk_flock(int fd, int operation)
   DCMNET_WARN("Unsupported flock(fd[" << fd << "],operation[0x"
     << hex << operation << "])");
   return 0;
-}
-
-void dcmtk_plockerr(const char *s)
-{
-  DCMNET_WARN(s << ": flock not implemented");
 }
 
 #else /* macintosh */
@@ -213,22 +207,6 @@ int dcmtk_flock(int fd, int operation)
   else return -1; /* unknown lock operation */
 }
 
-void dcmtk_plockerr(const char *s)
-{
-  LPVOID lpMsgBuf=NULL;
-
-  FormatMessage(
-    FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM,
-    NULL,
-    GetLastError(),
-    MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), // Default language
-    (LPTSTR) &lpMsgBuf, 0, NULL);
-
-  if (lpMsgBuf && s)
-      DCMNET_ERROR(s << ": " << (const char*)lpMsgBuf);
-  LocalFree(lpMsgBuf);
-}
-
 #else /* USE__LOCKING */
 
 /* Note: this alternative emulation of flock() for Win32 uses _locking().
@@ -259,12 +237,6 @@ int dcmtk_flock(int fd, int operation)
     pos = lseek(fd, originalPosition, SEEK_SET);
     if (pos < 0) return pos;
     return status;
-}
-
-void dcmtk_plockerr(const char *s)
-{
-  char buf[256];
-  DCMNET_ERROR(s << ": " << OFStandard::strerror(errno, buf, sizeof(buf)));
 }
 
 #endif /* USE__LOCKING */
@@ -320,12 +292,6 @@ int dcmtk_flock(int fd, int operation)
     return result;
 }
 
-void dcmtk_plockerr(const char *s)
-{
-  char buf[256];
-  DCMNET_ERROR(s << ": " << OFStandard::strerror(errno, buf, sizeof(buf)));
-}
-
 #endif /* _WIN32 */
 #endif /* macintosh */
 #endif /* HAVE_FLOCK */
@@ -374,36 +340,13 @@ int access(const char* path, int /* amode */)
 }
 #endif
 
-#endif
+#endif /* HAVE_ACCESS */
 
-#if 0 // never called, replaced by OFStandard::strerror()
-#ifndef HAVE_STRERROR
-
-#warning Your system does not seem to have the strerror() function
-
-/*
- * strerror does not appear to be available on SunOs 4.1.3
- */
-char *strerror(int errornum)
+DCMTK_DCMNET_EXPORT void dcmtk_plockerr(const char *s)
 {
-    static char string[256];
-    char *s = NULL;
-    /*
-     * These are not in the system include files,
-     * declare them here.
-     */
-    extern int sys_nerr;
-    extern char *sys_errlist[];
-
-    string[0] = '\0';
-    if (errornum < 0 || errornum >= sys_nerr) {
-        sprintf(string, "Error number: %d", errornum);
-	s = string;
-    } else {
-        s = sys_errlist[errornum];
-    }
-    return s;
-}
-
-#endif /* ! HAVE_STRERROR */
+#if !defined(HAVE_FLOCK) && defined(macintosh)
+  DCMNET_ERROR(s << ": flock not implemented");
+#else
+  DCMNET_ERROR(s << ": " << OFStandard::getLastSystemErrorCode().message());
 #endif
+}
