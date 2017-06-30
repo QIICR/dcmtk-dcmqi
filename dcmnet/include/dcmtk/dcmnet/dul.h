@@ -85,13 +85,6 @@ class LST_HEAD;
  */
 extern DCMTK_DCMNET_EXPORT OFGlobal<OFBool> dcmDisableGethostbyaddr;   /* default: OFFalse */
 
-/** Global flag specifying whether to reject presentation contexts in case of an
- *  unsuccessful SCP/SCU role selection (strict) or to return the corresponding
- *  user data item with appropriate values (default). This applies to association
- *  acceptors only.
- */
-extern DCMTK_DCMNET_EXPORT OFGlobal<OFBool> dcmStrictRoleSelection;   /* default: OFFalse */
-
 /** Global timeout in seconds for connecting to remote hosts.
  *  Default value is -1, which selects infinite timeout, i.e. blocking connect().
  */
@@ -190,6 +183,48 @@ typedef struct {
     OFBool useSecureLayer;
 }   DUL_ASSOCIATESERVICEPARAMETERS;
 
+/** Enum describing the possible role settings for role negotiation sub items.
+ *  DCMTK implements the following role negotiation behaviour for association
+ *  acceptors:
+ *  @verbatim
+ *  +--------------------+------------------+---------+
+ *  | Requestor Proposal | Acceptor Setting | Result  |
+ *  +--------------------+------------------+---------+
+ *  | SCU                | SCP              | NONE    |
+ *  | SCU                | SCU              | SCU     |
+ *  | SCU                | SCU/SCP          | SCU     |
+ *  | SCU                | DEFAULT          | DEFAULT |
+ *  | SCP                | SCP              | SCP     |
+ *  | SCP                | SCU              | NONE    |
+ *  | SCP                | SCU/SCP          | SCP     |
+ *  | SCP                | DEFAULT          | DEFAULT |
+ *  | SCU/SCP            | SCP              | SCP     |
+ *  | SCU/SCP            | SCU              | SCU     |
+ *  | SCU/SCP            | SCU/SCP          | SCU/SCP |
+ *  | SCU/SCP            | DEFAULT          | DEFAULT |
+ *  | DEFAULT            | SCP              | Reject  |
+ *  | DEFAULT            | SCU              | DEFAULT |
+ *  | DEFAULT            | SCU/SCP          | DEFAULT |
+ *  | DEFAULT            | DEFAULT          | DEFAULT |
+ *  +--------------------+------------------+---------+
+ *  @endverbatim
+ *  NONE, SCU, SCP as well as SCU/SCP denote the related flags in the
+ *  association role selection user items. The "Reject" case denotes that
+ *  such a presentation context will be rejected by the association acceptor:
+ *  If the requestor connects with default role but the acceptor explicitly
+ *  requires the SCP role (only) then the presentation context
+ *  will be rejected. All other cases do not lead to rejection but to actual
+ *  "negotiation".
+ *
+ *  The Reject case can be avoided by setting a related option available in
+ *  association acceptance code like ASC_acceptPresentationContext() or DcmSCP.
+ *  to OFTrue (reading something like "alwaysAcceptDefaultRole" since when enabled,
+ *  with the Reject being disabled all Default role proposals will be accepted).
+ *  This can make sense for faulty Requestors, e.g. faulty Storage Commitment Servers
+ *  connecting on a second connection for delivering an N-EVENT-REPORT, or broken
+ *  Retrieve requestors proposing GET-based SOP Classes for retrieval using the Default
+ *  role instead of the required SCP role.
+ */
 typedef enum {
     DUL_SC_ROLE_NONE,
     DUL_SC_ROLE_DEFAULT,

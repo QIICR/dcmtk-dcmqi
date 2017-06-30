@@ -78,8 +78,19 @@ int DcmFloatingPointDouble::compare(const DcmElement& rhs) const
     myThis = OFconst_cast(DcmFloatingPointDouble*, this);
     myRhs = OFstatic_cast(DcmFloatingPointDouble*, OFconst_cast(DcmElement*, &rhs));
 
-    /* iterate over all components and test equality */
+    /* check whether VMs are equal */
     unsigned long thisVM = myThis->getVM();
+    unsigned long rhsVM = myRhs->getVM();
+    if (thisVM < rhsVM)
+    {
+        return -1;
+    }
+    else if (thisVM > rhsVM)
+    {
+        return 1;
+    }
+
+    /* iterate over all components and test equality */
     for (unsigned long count = 0; count < thisVM; count++)
     {
         Float64 val = 0;
@@ -97,22 +108,7 @@ int DcmFloatingPointDouble::compare(const DcmElement& rhs) const
                     return -1;
                 }
             }
-            else
-            {
-                break; // values equal until this point (rhs shorter)
-            }
         }
-    }
-
-    /* we get here if all values are equal. Now look at the number of components */
-    unsigned long rhsVM = myRhs->getVM();
-    if (thisVM < rhsVM)
-    {
-        return -1;
-    }
-    else if (thisVM > rhsVM)
-    {
-        return 1;
     }
 
     /* all values as well as VM equal: objects are equal */
@@ -364,4 +360,24 @@ OFCondition DcmFloatingPointDouble::verify(const OFBool autocorrect)
     } else
         errorFlag = EC_Normal;
     return errorFlag;
+}
+
+
+OFBool DcmFloatingPointDouble::matches(const DcmElement& candidate,
+                                       const OFBool enableWildCardMatching) const
+{
+  OFstatic_cast(void,enableWildCardMatching);
+  if (ident() == candidate.ident())
+  {
+    // some const casts to call the getter functions, I do not modify the values, I promise!
+    DcmFloatingPointDouble& key = OFconst_cast(DcmFloatingPointDouble&,*this);
+    DcmElement& can = OFconst_cast(DcmElement&,candidate);
+    Float64 a, b;
+    for( unsigned long ui = 0; ui < key.getVM(); ++ui )
+      for( unsigned long uj = 0; uj < can.getVM(); ++uj )
+        if( key.getFloat64( a, ui ).good() && can.getFloat64( b, uj ).good() && a == b )
+          return OFTrue;
+    return key.getVM() == 0;
+  }
+  return OFFalse;
 }

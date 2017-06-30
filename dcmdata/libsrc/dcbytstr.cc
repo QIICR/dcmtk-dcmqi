@@ -27,6 +27,7 @@
 #include "dcmtk/dcmdata/dcjson.h"
 #include "dcmtk/dcmdata/dcbytstr.h"
 #include "dcmtk/dcmdata/dcvr.h"
+#include "dcmtk/dcmdata/dcmatch.h"
 
 #define INCLUDE_CSTDLIB
 #define INCLUDE_CSTDIO
@@ -152,8 +153,19 @@ int DcmByteString::compare(const DcmElement& rhs) const
     myThis = OFconst_cast(DcmByteString*, this);
     myRhs = OFstatic_cast(DcmByteString*, OFconst_cast(DcmElement*, &rhs));
 
-    /* iterate over all components and test equality */
+    /* check number of components. */
+    unsigned long rhsVM = myRhs->getVM();
     unsigned long thisVM = myThis->getVM();
+    if (thisVM < rhsVM)
+    {
+        return -1;
+    }
+    else if (thisVM > rhsVM)
+    {
+        return 1;
+    }
+
+    /* iterate over all components and test equality */
     for (unsigned long count = 0; count < thisVM; count++)
     {
         OFString val;
@@ -168,25 +180,9 @@ int DcmByteString::compare(const DcmElement& rhs) const
                     return result;
                 }
             }
-            else
-            {
-                break; // values equal until this point (rhs shorter)
-            }
         }
     }
-
-    /* we get here if all values are equal. Now look at the number of components. */
-    unsigned long rhsVM = myRhs->getVM();
-    if (thisVM < rhsVM)
-    {
-        return -1;
-    }
-    else if (thisVM > rhsVM)
-    {
-        return 1;
-    }
-
-    /* all values as well as VM equal: objects are equal */
+    /* all values equal */
     return 0;
 }
 
@@ -943,4 +939,33 @@ OFCondition DcmByteString::writeJson(STD_NAMESPACE ostream &out,
     DcmElement::writeJsonCloser(out, format);
     /* always report success */
     return EC_Normal;
+}
+
+
+OFBool DcmByteString::matches(const DcmElement& candidate,
+                              const OFBool enableWildCardMatching) const
+{
+  if (ident() == candidate.ident())
+  {
+    // some const casts to call the getter functions, I do not modify the values, I promise!
+    DcmByteString& key = OFconst_cast(DcmByteString&,*this);
+    DcmElement& can = OFconst_cast(DcmElement&,candidate);
+    OFString a, b;
+    for (unsigned long ui = 0; ui < key.getVM(); ++ui)
+      for (unsigned long uj = 0; uj < can.getVM(); ++uj)
+        if( key.getOFString( a, ui, OFTrue ).good() && can.getOFString( b, uj, OFTrue ).good() && matches( a, b, enableWildCardMatching ) )
+          return OFTrue;
+    return key.getVM() == 0;
+  }
+  return OFFalse;
+}
+
+
+OFBool DcmByteString::matches(const OFString& key,
+                              const OFString& candidate,
+                              const OFBool enableWildCardMatching) const
+{
+  OFstatic_cast(void,enableWildCardMatching);
+  // Universal Matching || Single Value Matching
+  return key.empty() || key == candidate;
 }

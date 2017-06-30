@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1994-2016, OFFIS e.V.
+ *  Copyright (C) 1994-2017, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -82,15 +82,18 @@ class DCMTK_DCMDATA_EXPORT DcmElement
      *  the object (if applicable).
      *  @param  rhs the right hand side of the comparison
      *  @return 0 if the object values are equal.
-     *          -1 if either the value of the first component that does not match
-     *          is lower in this object than in rhs, or all compared components match
-     *          but this object has fewer components than rhs. Also returned if rhs
+     *          -1 if this element has fewer components than the rhs element.
+     *          Also -1 if the value of the first component that does not match
+     *          is lower in this object than in rhs. Also returned if rhs
      *          cannot be casted to this object type or both objects are of
      *          different VR (i.e. the DcmEVR returned by the element's ident()
      *          call are different).
-     *          1 if either the value of the first component that does not match
-     *          is greater in this object than in rhs object, or all compared
-     *          components match but the this component is longer.
+     *          1 if either this element has more components than the rhs element, or
+     *          if the first component that does not match is greater in this object than
+     *          in rhs object.
+     *          If the function is overwritten by derived classes, the behaviour might
+     *          slightly change but all methods will return 0 on equality, and 1 or -1
+     *          if different.
      */
     virtual int compare(const DcmElement& rhs) const =0;
 
@@ -730,6 +733,41 @@ class DCMTK_DCMDATA_EXPORT DcmElement
      */
     virtual OFCondition getDecompressedColorModel(DcmItem *dataset,
                                                   OFString &decompressedColorModel);
+
+    /** perform attribute matching.
+     *  Perform attribute matching on a candidate element using this element as the matching
+     *  key.
+     *  @note The given candidate element must refer to the same attribute kind, i.e. have the
+     *    same tag and VR. The method will return OFFalse if it doesn't.
+     *  @param candidate the candidate element to compare this element with.
+     *  @param enableWildCardMatching enable or disable wild card matching. Defaults to OFTrue,
+     *    which means wild card matching is performed if the element's VR supports it. Set to
+     *    OFFalse to force single value matching instead.
+     *  @return OFTrue if the candidate matches this element, OFFalse otherwise.
+     */
+    virtual OFBool matches(const DcmElement& candidate,
+                           const OFBool enableWildCardMatching = OFTrue) const;
+
+    /** perform combined attribute matching.
+     *  Combine the given Attributes to one pair of matching key and candidate respectively
+     *  and perform attribute matching on the result.
+     *  @note The DICOM standard currently defines combined attribute matching for the VR
+     *    DA in combination with TM, such that two attributes can be combined into a single
+     *    attribute with VR=DT before matching against another pair of attributes with VR
+     *    DA and TM. The method will return OFFalse if this element's VR is not DA or the
+     *    given attributes are not of VR TM, DA and TM respectively.
+     *  @param keySecond the second part of the matching key that will be combined with this
+     *    element.
+     *  @param candidateFirst the first part of the candidate that will be matched against this
+     *    this element + keySecond.
+     *  @param candidateSecond the second part of the candidate that will be combined with
+     *    candidateFirst for matching against this elemement + keySecond.
+     *  @return OFTrue if the combination of this elemement and keySecond match with the
+     *    combination of candidateFirst and candidateSecond. OFFalse otherwise.
+     */
+    virtual OFBool combinationMatches(const DcmElement& keySecond,
+                                      const DcmElement& candidateFirst,
+                                      const DcmElement& candidateSecond) const;
 
     /* --- static helper functions --- */
 

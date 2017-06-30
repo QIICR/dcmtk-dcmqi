@@ -147,15 +147,15 @@ ELSE(WIN32 AND NOT CYGWIN)
   SET(PATH_SEPARATOR "/")
   SET(ENVIRONMENT_PATH_SEPARATOR ":")
   # Set dictionary path to the data dir inside install main dir (prefix).
-  if (DCMTK_ENABLE_EXTERNAL_DICTIONARY)
+  IF(DCMTK_ENABLE_EXTERNAL_DICTIONARY)
     SET(DCM_DICT_DEFAULT_PATH "${DCMTK_PREFIX}/${DCMTK_INSTALL_DATDIR}/dicom.dic")
     # If private dictionary should be utilized, add it to default dictionary path.
     IF(ENABLE_PRIVATE_TAGS)
       SET(DCM_DICT_DEFAULT_PATH "${DCM_DICT_DEFAULT_PATH}:${DCMTK_PREFIX}/${DCMTK_INSTALL_DATDIR}/private.dic")
     ENDIF(ENABLE_PRIVATE_TAGS)
-  ELSE (DCMTK_ENABLE_EXTERNAL_DICTIONARY)
+  ELSE(DCMTK_ENABLE_EXTERNAL_DICTIONARY)
     SET(DCM_DICT_DEFAULT_PATH "")
-  ENDIF (DCMTK_ENABLE_EXTERNAL_DICTIONARY)
+  ENDIF(DCMTK_ENABLE_EXTERNAL_DICTIONARY)
   # Set default directory for configuration and support data.
   SET(DCMTK_DEFAULT_CONFIGURATION_DIR "${DCMTK_PREFIX}/${DCMTK_INSTALL_ETCDIR}/")
   SET(DCMTK_DEFAULT_SUPPORT_DATA_DIR "${DCMTK_PREFIX}/${DCMTK_INSTALL_DATDIR}/")
@@ -509,6 +509,10 @@ ENDIF(WIN32 AND NOT CYGWIN)
     SET(CMAKE_REQUIRED_LIBRARIES ${CMAKE_REQUIRED_LIBRARIES} iphlpapi ws2_32 netapi32 wsock32)
   ENDIF(HAVE_WINSOCK_H)
 
+  IF(HAVE_FENV_H)
+    SET(HEADERS ${HEADERS} fenv.h)
+  ENDIF(HAVE_FENV_H)
+
   # std::vsnprintf and std::vsnprintf need the C++ version of the headers.
   # We just assume they exist when the C version was found
   SET(CXXHEADERS)
@@ -529,6 +533,7 @@ ENDIF(WIN32 AND NOT CYGWIN)
     SET(CXXHEADERS ${CXXHEADERS} cstddef)
   ENDIF(HAVE_CSTDDEF)
 
+  CHECK_FUNCTIONWITHHEADER_EXISTS(feenableexcept "${HEADERS}" HAVE_PROTOTYPE_FEENABLEEXCEPT)
   CHECK_FUNCTIONWITHHEADER_EXISTS(isinf "${HEADERS}" HAVE_PROTOTYPE_ISINF)
   CHECK_FUNCTIONWITHHEADER_EXISTS(isnan "${HEADERS}" HAVE_PROTOTYPE_ISNAN)
   CHECK_FUNCTIONWITHHEADER_EXISTS(finite "${HEADERS}" HAVE_PROTOTYPE_FINITE)
@@ -538,6 +543,7 @@ ENDIF(WIN32 AND NOT CYGWIN)
   CHECK_FUNCTIONWITHHEADER_EXISTS(flock "${HEADERS}" HAVE_PROTOTYPE_FLOCK)
   CHECK_FUNCTIONWITHHEADER_EXISTS(gethostbyname "${HEADERS}" HAVE_PROTOTYPE_GETHOSTBYNAME)
   CHECK_FUNCTIONWITHHEADER_EXISTS(gethostbyname_r "${HEADERS}" HAVE_PROTOTYPE_GETHOSTBYNAME_R)
+  CHECK_FUNCTIONWITHHEADER_EXISTS(gethostbyaddr_r "${HEADERS}" HAVE_PROTOTYPE_GETHOSTBYADDR_R)
   CHECK_FUNCTIONWITHHEADER_EXISTS(gethostid "${HEADERS}" HAVE_PROTOTYPE_GETHOSTID)
   CHECK_FUNCTIONWITHHEADER_EXISTS(bzero "${HEADERS}" HAVE_PROTOTYPE_BZERO)
   CHECK_FUNCTIONWITHHEADER_EXISTS(gethostname "${HEADERS}" HAVE_PROTOTYPE_GETHOSTNAME)
@@ -584,8 +590,6 @@ ENDIF(WIN32 AND NOT CYGWIN)
 
   # TODO: Uncommented because it seems not to make sense. Remove if there are no complaints.
   #CHECK_LIBRARY_EXISTS(iostream "" "" HAVE_LIBIOSTREAM)
-  #CHECK_LIBRARY_EXISTS(nsl "" "" HAVE_LIBNSL)
-  #CHECK_LIBRARY_EXISTS(socket "" "" HAVE_LIBSOCKET)
 
   # Check for some type definitions needed by JasPer and defines them if necessary
   # Even if not functions but types are looked for, the script works fine.
@@ -634,12 +638,12 @@ INCLUDE("${DCMTK_CMAKE_INCLUDE}CMake/dcmtkTryRun.cmake")
 IF(HAVE_MATH_H)
   IF(HAVE_LIBC_H)
     # checks if <libc.h> and <math.h> cause a problem if libc.h is included extern "C"
-    # and math.h is not. This is the case on QNX 6.2.x
+    # and math.h is not. This is the case on QNX 6.2.x and 6.5.x.
     DCMTK_TRY_COMPILE(INCLUDE_LIBC_H_AS_EXTERN_C "<libc.h> can be included as extern \"C\""
-    "#include <math.h
-extern \"C\" {
+    "extern \"C\" {
 #include <libc.h>
 }
+#include <math.h>
 int main()
 {
     int i = 0;
@@ -653,7 +657,7 @@ int main()
   ENDIF(HAVE_LIBC_H)
 
   # checks if <math.h> must be included as a C++ include file (i.e. without extern "C").
-  # Some sytems (Win32, HP/UX 10) use C++ language features in <math.h>
+  # Some sytems (Win32, HP/UX 10) use C++ language features in <math.h>.
   DCMTK_TRY_COMPILE(INCLUDE_MATH_H_AS_EXTERN_C "<math.h> can be included as extern \"C\""
   "extern \"C\" {
 #include <math.h>
@@ -701,10 +705,10 @@ int main()
 }")
 
 # Check for thread type
-IF (HAVE_WINDOWS_H)
-    SET(HAVE_INT_TYPE_PTHREAD_T 1)
-ELSE (HAVE_WINDOWS_H)
-    DCMTK_TRY_COMPILE(HAVE_INT_TYPE_PTHREAD_T "pthread_t is an integer type"
+IF(HAVE_WINDOWS_H)
+  SET(HAVE_INT_TYPE_PTHREAD_T 1)
+ELSE(HAVE_WINDOWS_H)
+  DCMTK_TRY_COMPILE(HAVE_INT_TYPE_PTHREAD_T "pthread_t is an integer type"
         "// test to see if pthread_t is a pointer type or not
 
 #include <pthread.h>
@@ -715,11 +719,11 @@ int main ()
   unsigned long l = p;
   return 0;
 }")
-    IF (NOT HAVE_INT_TYPE_PTHREAD_T)
-        SET(HAVE_POINTER_TYPE_PTHREAD_T 1 CACHE INTERNAL "Set if pthread_t is a pointer type")
-    ELSE (NOT HAVE_INT_TYPE_PTHREAD_T)
-        SET(HAVE_POINTER_TYPE_PTHREAD_T 0 CACHE INTERNAL "Set if pthread_t is a pointer type")
-    ENDIF (NOT HAVE_INT_TYPE_PTHREAD_T)
+  IF(NOT HAVE_INT_TYPE_PTHREAD_T)
+    SET(HAVE_POINTER_TYPE_PTHREAD_T 1 CACHE INTERNAL "Set if pthread_t is a pointer type")
+  ELSE(NOT HAVE_INT_TYPE_PTHREAD_T)
+    SET(HAVE_POINTER_TYPE_PTHREAD_T 0 CACHE INTERNAL "Set if pthread_t is a pointer type")
+  ENDIF(NOT HAVE_INT_TYPE_PTHREAD_T)
 ENDIF(HAVE_WINDOWS_H)
 
 # Check if typename works properly. Only MSC6 really fails here.
@@ -966,10 +970,10 @@ int main()
     return 0;
 }")
 
-# Compile config/arith.cc and generate config/arith.h
+# Compile config/tests/arith.cc and generate config/arith.h
 FUNCTION(INSPECT_FUNDAMENTAL_ARITHMETIC_TYPES)
   SET(ARITH_H_FILE "${DCMTK_BINARY_DIR}/config/include/dcmtk/config/arith.h")
-  IF("${DCMTK_SOURCE_DIR}/config/arith.cc" IS_NEWER_THAN "${ARITH_H_FILE}")
+  IF("${DCMTK_SOURCE_DIR}/config/tests/arith.cc" IS_NEWER_THAN "${ARITH_H_FILE}")
     IF(CMAKE_CROSSCOMPILING)
       IF(WIN32)
         UNIX_TO_WINE_PATH(ARITH_H_FILE "${ARITH_H_FILE}")
@@ -982,7 +986,7 @@ FUNCTION(INSPECT_FUNDAMENTAL_ARITHMETIC_TYPES)
     DCMTK_TRY_RUN(
       RESULT COMPILED
       "${DCMTK_BINARY_DIR}/CMakeTmp/Arith"
-      "${DCMTK_SOURCE_DIR}/config/arith.cc"
+      "${DCMTK_SOURCE_DIR}/config/tests/arith.cc"
       COMPILE_DEFINITIONS -I"${DCMTK_BINARY_DIR}/config/include" -I"${DCMTK_SOURCE_DIR}/ofstd/include" -I"${DCMTK_SOURCE_DIR}/ofstd/libsrc"
       RUN_OUTPUT_VARIABLE OUTPUT
       COMPILE_OUTPUT_VARIABLE CERR
@@ -1004,6 +1008,95 @@ FUNCTION(INSPECT_FUNDAMENTAL_ARITHMETIC_TYPES)
     ENDIF(COMPILED)
   ENDIF() # file needs update
 ENDFUNCTION(INSPECT_FUNDAMENTAL_ARITHMETIC_TYPES)
+
+FUNCTION(DCMTK_ADD_CXX11_FLAGS)
+  STRING(FIND "${CMAKE_CXX_FLAGS}" "${DCMTK_CXX11_FLAGS}" INDEX)
+  IF(INDEX EQUAL -1)
+    SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${DCMTK_CXX11_FLAGS}" PARENT_SCOPE)
+  ENDIF()
+ENDFUNCTION(DCMTK_ADD_CXX11_FLAGS)
+
+FUNCTION(DCMTK_TEST_ENABLE_CXX11)
+  SET(RESULT 0)
+  SET(TEXT_RESULT "disabled")
+  IF(DCMTK_ENABLE_CXX11)
+    IF(DEFINED HAVE_CXX11_TEST_RESULT)
+      IF(HAVE_CXX11_TEST_RESULT)
+        DCMTK_ADD_CXX11_FLAGS()
+        SET(RESULT 1)
+        SET(TEXT_RESULT "enabled")
+      ENDIF()
+    ELSE()
+      DCMTK_ADD_CXX11_FLAGS() # will automatically be removed by the function scope
+      SET(MESSAGE "Checking whether the compiler supports C++11")
+      MESSAGE(STATUS "${MESSAGE}")
+      TRY_COMPILE(COMPILE_RESULT "${CMAKE_BINARY_DIR}" "${DCMTK_SOURCE_DIR}/config/tests/cxx11.cc")
+      SET(HAVE_CXX11_TEST_RESULT "${COMPILE_RESULT}" CACHE INTERNAL "Caches the configuration test result for C++11 support.")
+      IF(COMPILE_RESULT)
+        SET(RESULT 1)
+        SET(TEXT_RESULT "enabled")
+        MESSAGE(STATUS "${MESSAGE} -- yes")
+      ELSE()
+        MESSAGE(STATUS "${MESSAGE} -- no")
+      ENDIF()
+    ENDIF()
+  ENDIF()
+  SET(HAVE_CXX11 "${RESULT}" CACHE INTERNAL "Set to 1 if the compiler supports C++11 and it should be enabled.")
+  MESSAGE(STATUS "Info: C++11 features ${TEXT_RESULT}")
+  IF(RESULT)
+    # push C++11 CXX-flags to the parent scope
+    SET(CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS} PARENT_SCOPE)
+  ENDIF()
+ENDFUNCTION(DCMTK_TEST_ENABLE_CXX11)
+
+FUNCTION(DCMTK_TEST_ENABLE_STL_FEATURE NAME)
+  STRING(TOUPPER "${NAME}" FEATURE)
+  IF(ARGN)
+    SET(SOURCEFILE "${ARGN}")
+  ELSE()
+    SET(SOURCEFILE "${NAME}")
+  ENDIF()
+  IF(DCMTK_ENABLE_STL_${FEATURE} STREQUAL "INFERRED")
+    SET(DCMTK_ENABLE_STL_${FEATURE} ${DCMTK_ENABLE_STL})
+  ENDIF()
+  SET(RESULT 0)
+  SET(TEXT_RESULT "disabled")
+  IF(DCMTK_ENABLE_STL_${FEATURE} STREQUAL "ON")
+    IF(DEFINED HAVE_STL_${FEATURE}_TEST_RESULT)
+      IF(HAVE_STL_${FEATURE}_TEST_RESULT)
+        SET(RESULT 1)
+        SET(TEXT_RESULT "enabled")
+      ENDIF()
+    ELSE()
+      SET(MESSAGE "Checking whether STL ${NAME} works correctly")
+      MESSAGE(STATUS "${MESSAGE}")
+      DCMTK_TRY_RUN(RUN_RESULT COMPILE_RESULT "${CMAKE_BINARY_DIR}" "${DCMTK_SOURCE_DIR}/config/tests/${SOURCEFILE}.cc")
+      IF(COMPILE_RESULT AND RUN_RESULT EQUAL 0)
+        SET(RESULT 1)
+        SET(TEXT_RESULT "enabled")
+        MESSAGE(STATUS "${MESSAGE} -- yes")
+      ELSE()
+        MESSAGE(STATUS "${MESSAGE} -- no")
+      ENDIF()
+      SET(HAVE_STL_${FEATURE}_TEST_RESULT ${RESULT} CACHE INTERNAL "Caches the configuration test result for STL ${NAME}")
+    ENDIF()
+  ENDIF()
+  SET(HAVE_STL_${FEATURE} ${RESULT} CACHE INTERNAL "Set to 1 if the compiler/OS provides a working STL ${NAME} implementation.")
+  MESSAGE(STATUS "Info: STL ${NAME} support ${TEXT_RESULT}")
+ENDFUNCTION(DCMTK_TEST_ENABLE_STL_FEATURE)
+
+DCMTK_TEST_ENABLE_CXX11()
+DCMTK_TEST_ENABLE_STL_FEATURE("vector")
+DCMTK_TEST_ENABLE_STL_FEATURE("algorithm" "algo")
+DCMTK_TEST_ENABLE_STL_FEATURE("limits")
+DCMTK_TEST_ENABLE_STL_FEATURE("list")
+DCMTK_TEST_ENABLE_STL_FEATURE("map")
+DCMTK_TEST_ENABLE_STL_FEATURE("memory")
+DCMTK_TEST_ENABLE_STL_FEATURE("stack")
+DCMTK_TEST_ENABLE_STL_FEATURE("string")
+DCMTK_TEST_ENABLE_STL_FEATURE("type_traits" "ttraits")
+DCMTK_TEST_ENABLE_STL_FEATURE("tuple")
+DCMTK_TEST_ENABLE_STL_FEATURE("system_error" "syserr")
 
 IF(CMAKE_CROSSCOMPILING)
   SET(DCMTK_CROSS_COMPILING ${CMAKE_CROSSCOMPILING})

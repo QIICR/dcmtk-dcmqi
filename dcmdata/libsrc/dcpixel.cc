@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1997-2010, OFFIS e.V.
+ *  Copyright (C) 1997-2017, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -25,6 +25,7 @@
 #include "dcmtk/dcmdata/dcpixseq.h"
 #include "dcmtk/dcmdata/dcdeftag.h"
 #include "dcmtk/dcmdata/dcitem.h"
+#include "dcmtk/dcmdata/dcpxitem.h"
 
 //
 // class DcmRepresentationEntry
@@ -172,18 +173,6 @@ DcmPixelData &DcmPixelData::operator=(const DcmPixelData &obj)
   return *this;
 }
 
-
-OFCondition DcmPixelData::copyFrom(const DcmObject& rhs)
-{
-  if (this != &rhs)
-  {
-    if (rhs.ident() != ident()) return EC_IllegalCall;
-    *this = OFstatic_cast(const DcmPixelData &, rhs);
-  }
-  return EC_Normal;
-}
-
-
 // methods in alphabetical order
 
 Uint32
@@ -222,6 +211,10 @@ DcmPixelData::canChooseRepresentation(
 
     const DcmRepresentationEntry findEntry(repType, repParam, NULL);
     DcmRepresentationListIterator resultIt(repListEnd);
+    // find out whether we have the desired target representation available. Three possibilities:
+    // 1. we have uncompressed data, and target is uncompressed (conversion betweeen uncompressed always possible)
+    // 2. we have uncompressed and want compressed, but we are forced to write uncompressed anyway
+    // 3. we want to go to compressed, and already have the desired representation available
     if ((!toType.isEncapsulated() && existUnencapsulated) ||
         (toType.isEncapsulated() && writeUnencapsulated(repType) && existUnencapsulated) ||
         (toType.isEncapsulated() && findRepresentationEntry(findEntry, resultIt) == EC_Normal))
@@ -229,18 +222,20 @@ DcmPixelData::canChooseRepresentation(
         // representation found
         result = OFTrue;
     }
+    // otherwise let's see whether we know how to convert to the target representation
     else
     {
         // representation not found, check if we have a codec that can create the
         // desired representation.
         if (original == repListEnd)
         {
+          // we have uncompressed data, check whether we know how to go from uncompressed to desired compression
           result = DcmCodecList::canChangeCoding(EXS_LittleEndianExplicit, toType.getXfer());
         }
         else if (toType.isEncapsulated())
         {
-          result = DcmCodecList::canChangeCoding(EXS_LittleEndianExplicit, toType.getXfer());
-
+          // we have already compressed data, check whether we know how to transcode
+          result = DcmCodecList::canChangeCoding((*original)->repType, toType.getXfer());
           if (!result)
           {
             // direct transcoding is not possible. Check if we can decode and then encode.
@@ -250,6 +245,7 @@ DcmPixelData::canChooseRepresentation(
         }
         else
         {
+          // target transfer syntax is uncompressed, look whether decompression is possible
           result = DcmCodecList::canChangeCoding((*original)->repType, EXS_LittleEndianExplicit);
         }
     }
@@ -308,8 +304,112 @@ DcmPixelData::chooseRepresentation(
 }
 
 
-void
-DcmPixelData::clearRepresentationList(
+int DcmPixelData::compare(const DcmElement& rhs) const
+{
+  // check tag and VR
+  int result = DcmElement::compare(rhs);
+  if (result != 0)
+  {
+    return result;
+  }
+
+  // cast away constness (dcmdata is not const correct...)
+  DcmPixelData* myThis = NULL;
+  DcmPixelData* myRhs = NULL;
+  myThis = OFconst_cast(DcmPixelData*, this);
+  myRhs =  OFstatic_cast(DcmPixelData*, OFconst_cast(DcmElement*, &rhs));
+
+  if (myThis->existUnencapsulated && myRhs->existUnencapsulated)
+  {
+    // we have uncompressed representations, which can be compared using DcmPolymorphOBOW::compare
+    return DcmPolymorphOBOW::compare(rhs);
+  }
+
+  // both do not have uncompressed data, we must compare compressed ones.
+  // check both have a current representation at all.
+  if ((myThis->current == myThis->repList.end()) && (myRhs->current != myRhs->repList.end())) return -1;
+  if ((myThis->current != myThis->repList.end()) && (myRhs->current == myRhs->repList.end())) return 1;
+  if ((myThis->current == myThis->repList.end()) && (myRhs->current == myRhs->repList.end()))
+  {
+    // if one of both have uncompressed data at least, that one is considered "bigger"
+    if (myThis->existUnencapsulated) return 1;
+    if (myRhs->existUnencapsulated) return -1;
+    else return 0;
+  }
+
+  // both have compressed data: compare current representation (only)
+  if ((myThis->current != myThis->repList.end()) && (myRhs->current != myRhs->repList.end()) )
+  {
+    E_TransferSyntax myRep = (*(myThis->current))->repType;
+    E_TransferSyntax rhsRep = (*(myRhs->current))->repType;
+    DcmXfer myXfer(myRep);
+    DcmXfer rhsXfer(rhsRep);
+    // if both transfer syntaxes are different, we have to perform more checks to
+    // find out whether the related pixel data is comparable; this is the case
+    // for all uncompressed transfer syntaxes, except Big Endian with OW data
+    // since it uses a different memory layout, and we do not want to byte-swap
+    // the values for the comparison.
+    if (myRep != rhsRep)
+    {
+        return 1;
+    }
+    else
+    {
+      // For compressed, compare pixel items bytewise
+      DcmPixelSequence* myPix = (*(myThis->current))->pixSeq;
+      DcmPixelSequence* rhsPix = (*(myRhs->current))->pixSeq;
+      if (!myPix && rhsPix) return -1;
+      if (myPix && !rhsPix) return 1;
+      if (!myPix && !rhsPix) return 0;
+      // Check number of pixel items
+      long unsigned int myNumPix = myPix->card();
+      long unsigned int rhsNumPix = rhsPix->card();
+      if (myNumPix < rhsNumPix) return -1;
+      if (myNumPix > rhsNumPix) return 1;
+      // loop over pixel items, both have the same number of pixel items
+      for (unsigned long n = 0; n < myNumPix; n++)
+      {
+        DcmPixelItem* myPixItem = NULL;
+        DcmPixelItem* rhsPixItem = NULL;
+        if (myPix->getItem(myPixItem, n).good() && rhsPix->getItem(rhsPixItem, n).good())
+        {
+          // compare them value by value, using DcmOtherByteOtherWord::compare() method
+          int result = myPixItem->compare(*rhsPixItem);
+          if (result != 0)
+          {
+            return result;
+          }
+        }
+        else
+        {
+          DCMDATA_ERROR("Internal error: Could not get pixel item #" << n << " from Pixel Sequence");
+          return 1;
+        }
+      }
+      return 0;
+    }
+  }
+  // if one of both have a current representation; consider that one "bigger".
+  // if none has a current one, consider both equal (neither uncompressed or compressed data present).
+  else
+  {
+    if (myThis->current != myThis->repList.end()) return 1;
+    if (myRhs->current != myRhs->repList.end()) return -1;
+    else return 0;
+  }
+}
+
+OFCondition DcmPixelData::copyFrom(const DcmObject& rhs)
+{
+  if (this != &rhs)
+  {
+    if (rhs.ident() != ident()) return EC_IllegalCall;
+    *this = OFstatic_cast(const DcmPixelData &, rhs);
+  }
+  return EC_Normal;
+}
+
+void DcmPixelData::clearRepresentationList(
     DcmRepresentationListIterator leaveInList)
 {
     /* define iterators to go through all representations in the list */

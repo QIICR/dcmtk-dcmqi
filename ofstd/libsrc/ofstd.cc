@@ -140,6 +140,9 @@ BEGIN_EXTERN_C
 #ifdef HAVE_SYS_UTSNAME_H
 #include <sys/utsname.h>
 #endif
+#ifdef HAVE_SYS_SOCKET_H
+#include <sys/socket.h>
+#endif
 END_EXTERN_C
 
 #ifdef HAVE_WINDOWS_H
@@ -168,10 +171,6 @@ typedef u_short WORD;
 #endif /* macintosh */
 
 #endif /* HAVE_WINDOWS_H */
-
-#ifdef HAVE_GUSI_H
-#include <GUSI.h>
-#endif
 
 #ifdef _WIN32
 #include <process.h>     /* needed for declaration of getpid() */
@@ -2622,6 +2621,14 @@ void OFStandard::trimString(const char*& pBegin, const char*& pEnd)
 
 #define MAX_NAME 65536
 
+#ifdef HAVE_GETHOSTBYNAME_R
+#ifndef HAVE_PROTOTYPE_GETHOSTBYNAME_R
+extern "C" {
+    int gethostbyname_r(const char *name, struct hostent *ret, char *buf, size_t buflen, struct hostent **result, int *h_errnop);
+}
+#endif
+#endif
+
 OFStandard::OFHostent OFStandard::getHostByName( const char* name )
 {
 #ifdef HAVE_GETHOSTBYNAME_R
@@ -2644,6 +2651,14 @@ OFStandard::OFHostent OFStandard::getHostByName( const char* name )
     return OFHostent( gethostbyname( name ) );
 #endif
 }
+
+#ifdef HAVE_GETHOSTBYADDR_R
+#ifndef HAVE_PROTOTYPE_GETHOSTBYADDR_R
+extern "C" {
+    int gethostbyaddr_r(const void *addr, socklen_t len, int type, struct hostent *ret, char *buf, size_t buflen, struct hostent **result, int *h_errnop);
+}
+#endif
+#endif
 
 OFStandard::OFHostent OFStandard::getHostByAddr( const char* addr,
                                      int len,
@@ -2849,9 +2864,13 @@ OFCondition OFStandard::dropPrivileges()
 }
 
 
-#ifndef DCMTK_USE_CXX11_STL
+#ifndef HAVE_CXX11
 DCMTK_OFSTD_EXPORT OFnullptr_t OFnullptr;
 DCMTK_OFSTD_EXPORT OFnullopt_t OFnullopt;
+#endif
+
+
+#ifndef HAVE_STL_TUPLE
 static const OFignore_t OFignore_value;
 DCMTK_OFSTD_EXPORT const OFignore_t& OFignore( OFignore_value );
 OFtuple<> OFmake_tuple() { return OFtuple<>(); }
@@ -2918,11 +2937,6 @@ OFString OFStandard::getHostName()
 
 void OFStandard::initializeNetwork()
 {
-#ifdef HAVE_GUSI_H
-    GUSISetup(GUSIwithSIOUXSockets);
-    GUSISetup(GUSIwithInternetSockets);
-#endif
-
 #ifdef HAVE_WINSOCK_H
     WSAData winSockData;
     /* we need at least version 1.1 */

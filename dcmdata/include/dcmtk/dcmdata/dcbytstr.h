@@ -90,13 +90,15 @@ class DCMTK_DCMDATA_EXPORT DcmByteString: public DcmElement
      *  object (if applicable).
      *  @param  rhs the right hand side of the comparison
      *  @return 0 if the object values are equal.
-     *          -1 if either the value of the  first component that does not match
-     *          is lower in this object than in rhs, or all compared components match
-     *          but this object has fewer components than rhs. Also returned if rhs
-     *          cannot be casted to this object type.
-     *          1 if either the value of the first component that does not match
-     *          is greater in this object than in rhs object, or all compared
-     *          components match but the this component is longer.
+     *          -1 if this element has fewer components than the rhs element.
+     *          Also -1 if the value of the first component that does not match
+     *          is lower in this object than in rhs. Also returned if rhs
+     *          cannot be casted to this object type or both objects are of
+     *          different VR (i.e. the DcmEVR returned by the element's ident()
+     *          call are different).
+     *          1 if either this element has more components than the rhs element, or
+     *          if the first component that does not match is greater in this object than
+     *          in rhs object.
      */
     virtual int compare(const DcmElement& rhs) const;
 
@@ -290,6 +292,28 @@ class DCMTK_DCMDATA_EXPORT DcmByteString: public DcmElement
      */
     virtual OFCondition writeJson(STD_NAMESPACE ostream &out,
                                   DcmJsonFormat &format);
+
+    /// @copydoc DcmElement::matches()
+    virtual OFBool matches(const DcmElement& candidate,
+                           const OFBool enableWildCardMatching = OFTrue) const;
+
+    /** perform attribute matching on a single pair of string values.
+     *  Compare two single string values using the attribute matching function appropriate for
+     *  this element's VR (Universal Matching, Single Value Matching, Wild Card Matching or
+     *  Range Matching).
+     *  @note This method is called by the other overload of matches() for each combination of
+     *    values in the key and candidate element (implementing multi value matching for
+     *    elements with VM>1).
+     *  @param key the key value to match against the candidate.
+     *  @param candidate the candidate value to match the key against.
+     *  @param enableWildCardMatching enable or disable wild card matching. Defaults to OFTrue,
+     *    which means wild card matching is performed if the element's VR supports it. Set to
+     *    OFFalse to force single value matching instead.
+     *  @return OFTrue if the candidate string matches the key string, OFFalse otherwise.
+     */
+    virtual OFBool matches(const OFString& key,
+                           const OFString& candidate,
+                           const OFBool enableWildCardMatching = OFTrue) const;
 
  protected:
 

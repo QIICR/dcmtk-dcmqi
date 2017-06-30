@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 2008-2015, OFFIS e.V.
+ *  Copyright (C) 2008-2017, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -233,10 +233,13 @@ public:
    *  @param abstractSyntax [in] The abstract syntax (UID) to look for
    *  @param transferSyntax [in] The transfer syntax (UID) to look for. If empty, the transfer
    *                             syntax is not checked.
+   *  @param requestorRole  [in] The role to look for (denoting the role the association
+   *                             requestor plays)
    *  @return Adequate Presentation context ID that can be used. 0 if none found.
    */
   T_ASC_PresentationContextID findPresentationContextID(const OFString &abstractSyntax,
-                                                        const OFString &transferSyntax);
+                                                        const OFString &transferSyntax,
+                                                        const T_ASC_SC_ROLE requestorRole = ASC_SC_ROLE_DEFAULT);
 
   /** After a successful association negotiation, this function is called to return the
    *  presentation context ID that best matches the desired abstract syntax and transfer
@@ -245,6 +248,7 @@ public:
    *  - Else then tries to find an explicit VR uncompressed TS presentation context
    *  - Else then tries to find an implicit VR uncompressed TS presentation context
    *  - Else finally accepts each matching presentation ctx independent of TS.
+   *  @warning This method does not support filtering for a specific role, yet.
    *  @param abstractSyntax [in] The abstract syntax (UID) to look for
    *  @param transferSyntax [in] The transfer syntax (UID) to look for. If empty, the transfer
    *                             syntax is not checked.

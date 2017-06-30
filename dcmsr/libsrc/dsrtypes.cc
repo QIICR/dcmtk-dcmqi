@@ -335,7 +335,8 @@ static const S_DocumentTypeNameMap DocumentTypeNameMap[] =
     {DSRTypes::DT_RadiopharmaceuticalRadiationDoseSR,  UID_RadiopharmaceuticalRadiationDoseSRStorage,  EM_EnhancedEquipment,               "SR", "Radiopharmaceutical Radiation Dose SR"},
     {DSRTypes::DT_ExtensibleSR,                        UID_ExtensibleSRStorage,                        EM_EnhancedEquipment,               "SR", "Extensible SR"},
     {DSRTypes::DT_AcquisitionContextSR,                UID_AcquisitionContextSRStorage,                EM_EnhancedEquipment,               "SR", "Acquisition Context SR"},
-    {DSRTypes::DT_SimplifiedAdultEchoSR,               UID_SimplifiedAdultEchoSRStorage,               EM_EnhancedEquipment | EM_Timezone, "SR", "Simplified Adult Echo SR"}
+    {DSRTypes::DT_SimplifiedAdultEchoSR,               UID_SimplifiedAdultEchoSRStorage,               EM_EnhancedEquipment | EM_Timezone, "SR", "Simplified Adult Echo SR"},
+    {DSRTypes::DT_PatientRadiationDoseSR,              UID_PatientRadiationDoseSRStorage,              EM_EnhancedEquipment,               "SR", "Patient Radiation Dose SR"}
 };
 
 
@@ -379,14 +380,18 @@ static const S_ValueTypeNameMap ValueTypeNameMap[] =
 
 static const S_PresentationStateTypeNameMap PresentationStateTypeNameMap[] =
 {
-    {DSRTypes::PT_invalid,              "",                                                         "invalid/unknown presentation state type"},
-    {DSRTypes::PT_Grayscale,            UID_GrayscaleSoftcopyPresentationStateStorage,              "GSPS"},
-    {DSRTypes::PT_Color,                UID_ColorSoftcopyPresentationStateStorage,                  "CSPS"},
-    {DSRTypes::PT_PseudoColor,          UID_PseudoColorSoftcopyPresentationStateStorage,            "PCSPS"},
-    {DSRTypes::PT_Blending,             UID_BlendingSoftcopyPresentationStateStorage,               "BSPS"},
-    {DSRTypes::PT_XAXRFGrayscale,       UID_XAXRFGrayscaleSoftcopyPresentationStateStorage,         "XGSPS"},
-    {DSRTypes::PT_GrayscalePlanarMPR,   UID_GrayscalePlanarMPRVolumetricPresentationStateStorage,   "GPVPS"},
-    {DSRTypes::PT_CompositingPlanarMPR, UID_CompositingPlanarMPRVolumetricPresentationStateStorage, "CPVPS"}
+    {DSRTypes::PT_invalid,                  "",                                                             "invalid/unknown presentation state type"},
+    {DSRTypes::PT_Grayscale,                UID_GrayscaleSoftcopyPresentationStateStorage,                  "GSPS"},
+    {DSRTypes::PT_Color,                    UID_ColorSoftcopyPresentationStateStorage,                      "CSPS"},
+    {DSRTypes::PT_PseudoColor,              UID_PseudoColorSoftcopyPresentationStateStorage,                "PCSPS"},
+    {DSRTypes::PT_Blending,                 UID_BlendingSoftcopyPresentationStateStorage,                   "BSPS"},
+    {DSRTypes::PT_XAXRFGrayscale,           UID_XAXRFGrayscaleSoftcopyPresentationStateStorage,             "XGSPS"},
+    {DSRTypes::PT_GrayscalePlanarMPR,       UID_GrayscalePlanarMPRVolumetricPresentationStateStorage,       "GP-VPS"},
+    {DSRTypes::PT_CompositingPlanarMPR,     UID_CompositingPlanarMPRVolumetricPresentationStateStorage,     "CP-VPS"},
+    {DSRTypes::PT_AdvancedBlending,         UID_AdvancedBlendingPresentationStateStorage,                   "ABPS"},
+    {DSRTypes::PT_VolumeRendering,          UID_VolumeRenderingVolumetricPresentationStateStorage,          "VR-VPS"},
+    {DSRTypes::PT_SegmentedVolumeRendering, UID_SegmentedVolumeRenderingVolumetricPresentationStateStorage, "SVR-VPS"},
+    {DSRTypes::PT_MultipleVolumeRendering,  UID_MultipleVolumeRenderingVolumetricPresentationStateStorage,  "MVR-VPS"}
 };
 
 
@@ -902,7 +907,7 @@ DSRTypes::E_CharacterSet DSRTypes::definedTermToCharacterSet(const OFString &def
 
 OFBool DSRTypes::isDocumentTypeSupported(const E_DocumentType documentType)
 {
-    return (documentType != DT_invalid) && (documentType != DT_ExtensibleSR);
+    return (documentType != DT_invalid) && (documentType != DT_ExtensibleSR) && (documentType != DT_PatientRadiationDoseSR);
 }
 
 
@@ -1488,6 +1493,9 @@ DSRIODConstraintChecker *DSRTypes::createIODConstraintChecker(const E_DocumentTy
             break;
         case DT_SimplifiedAdultEchoSR:
             checker = new DSRSimplifiedAdultEchoSRConstraintChecker();
+            break;
+        case DT_PatientRadiationDoseSR:
+            /* not yet supported */
             break;
         case DT_invalid:
             /* nothing to do */

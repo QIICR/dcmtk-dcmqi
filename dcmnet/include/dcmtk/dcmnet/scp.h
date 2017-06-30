@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 2009-2016, OFFIS e.V.
+ *  Copyright (C) 2009-2017, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -170,7 +170,16 @@ public:
    *  @param abstractSyntax [in] The UID of the abstract syntax (e.g.\ SOP class) to add
    *  @param xferSyntaxes   [in] List of transfer syntaxes (UIDs) that should be supported
    *                             for the given abstract syntax name
-   *  @param role           [in] The role to be negotiated
+   *  @param requestorRole  [in] The role to be negotiated. This denotes the role of the
+   *                        the association requestor that this instance should accept, i.e. if
+   *                        set to ASC_SC_ROLE_SCP it means that the association requestor
+   *                        is allowed to negotiate the SCP role, thus, that this DcmSCP instance
+   *                        will be playing the SCU role for this abstract syntax. The default
+   *                        role (ASC_SC_ROLE_DEFAULT) implicates that this DcmSCP instance
+   *                        will be allowed to play the SCP role only, i.e. it will acknowledge
+   *                        such an explicit SCU role request, but also it will accept a proposal
+   *                        for the abstract syntax with no explicit role being proposed
+   *                        at all (since per default the requestor is SCU and the acceptor SCP).
    *  @param profile        [in] The profile the abstract syntax should be added to. The
    *                             default is to add it to the DcmSCP's internal standard
    *                             profile called "DEFAULT".
@@ -178,7 +187,7 @@ public:
    */
   virtual OFCondition addPresentationContext(const OFString &abstractSyntax,
                                              const OFList<OFString> &xferSyntaxes,
-                                             const T_ASC_SC_ROLE role = ASC_SC_ROLE_DEFAULT,
+                                             const T_ASC_SC_ROLE requestorRole = ASC_SC_ROLE_DEFAULT,
                                              const OFString &profile = "DEFAULT");
 
   /** Set SCP's TCP/IP listening port
@@ -289,6 +298,19 @@ public:
    *  @param mode [in] Disable progress notification if OFFalse
    */
   void setProgressNotificationMode(const OFBool mode);
+
+  /** Option to always accept a default role as association acceptor.
+   *  If OFFalse (default) the acceptor will reject a presentation context proposed
+   *  with Default role (no role selection at all) when it is configured for role
+   *  SCP only. If this option is set to OFTrue then such presentation contexts will
+   *  be accepted in Default role (i.e. acceptor does not return role selection for
+   *  this presentation context at all). Overall, if set to OFTrue, there are no
+   *  requestor proposals possible that lead to a complete rejection of a presentation
+   *  context. See also role documentation in dul.h.
+   *  @param  enabled If OFTrue, do not reject Default role proposals when configured
+   *          for SCP role. OFFalse (default behaviour): Reject such proposals.
+   */
+  void setAlwaysAcceptDefaultRole(const OFBool enabled);
 
   /* Get methods for SCP settings */
 

@@ -1180,7 +1180,7 @@ OFCondition DcmElement::read(DcmInputStream &inStream,
                     if (fLoadValue)
                     {
                         offile_off_t skipped = inStream.skip(getLengthField());
-                        if (skipped < getLengthField())
+                        if (skipped < OFstatic_cast(offile_off_t, getLengthField()))
                         {
                             /* If desired, specific parser errors will be ignored */
                             if (dcmIgnoreParsingErrors.get())
@@ -1357,8 +1357,8 @@ OFCondition DcmElement::write(DcmOutputStream &outStream,
                  * in the buffer, check if the buffer is still sufficient for the requirements
                  * of this element, which may need only 8 instead of 12 bytes.
                  */
-                if ((outStream.avail() >= DCM_TagInfoLength) ||
-                    (outStream.avail() >= getTagAndLengthSize(oxfer)))
+                if ((outStream.avail() >= OFstatic_cast(offile_off_t, DCM_TagInfoLength)) ||
+                    (outStream.avail() >= OFstatic_cast(offile_off_t, getTagAndLengthSize(oxfer))))
                 {
                     /* if there is no value, Length (member variable) shall be set to 0 */
                     if (! accessPossible) setLengthField(0);
@@ -1852,7 +1852,7 @@ OFCondition DcmElement::getPartialValue(void *targetBuffer,
     if (bytesToRead > 0)
     {
       // here we read the main block of data
-     if (bytesToRead != readStream->read(targetBufferChar, bytesToRead))
+     if (OFstatic_cast(offile_off_t, bytesToRead) != readStream->read(targetBufferChar, bytesToRead))
          return EC_InvalidStream;
 
       // swap to desired byte order. fByteOrder contains the byte order in file.
@@ -2175,4 +2175,22 @@ OFCondition DcmElement::checkVM(const unsigned long vmNum,
     }
   }
   return result;
+}
+
+OFBool DcmElement::matches(const DcmElement& candidate,
+                           const OFBool enableWildCardMatching) const
+{
+  OFstatic_cast(void,candidate);
+  OFstatic_cast(void,enableWildCardMatching);
+  return OFFalse;
+}
+
+OFBool DcmElement::combinationMatches(const DcmElement& keySecond,
+                                      const DcmElement& candidateFirst,
+                                      const DcmElement& candidateSecond) const
+{
+  OFstatic_cast(void,keySecond);
+  OFstatic_cast(void,candidateFirst);
+  OFstatic_cast(void,candidateSecond);
+  return OFFalse;
 }

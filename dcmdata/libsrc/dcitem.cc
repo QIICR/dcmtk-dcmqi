@@ -166,8 +166,18 @@ int DcmItem::compare(const DcmItem& rhs) const
     myThis = OFconst_cast(DcmItem*, this);
     myRhs =  OFconst_cast(DcmItem*, &rhs);
 
-    // iterate over all items and test equality
+    // check length, i.e. number of elements in item
     unsigned long thisVM = myThis->card();
+    unsigned long rhsVM = myRhs->card();
+    if (thisVM < rhsVM)
+    {
+        return -1;
+    }
+    else if (thisVM > rhsVM)
+    {
+        return 1;
+    }
+    // iterate over all items and test equality
     for (unsigned long count = 0; count < thisVM; count++)
     {
         DcmElement* val = myThis->getElement(count);
@@ -183,23 +193,7 @@ int DcmItem::compare(const DcmItem& rhs) const
                 }
                 // otherwise they are equal, continue comparison
             }
-            else
-            {
-                break; // values equal until this point (rhs shorter)
-            }
         }
-    }
-
-    // we get here if all values are equal. Now look at the
-    // number of components
-    unsigned long rhsVM = myRhs->card();
-    if (thisVM < rhsVM)
-    {
-        return -1;
-    }
-    else if (thisVM > rhsVM)
-    {
-        return 1;
     }
 
     // all values as well as VM equal: objects are equal
@@ -361,7 +355,8 @@ void DcmItem::checkAndUpdateVR(DcmItem &item,
                                DcmTag &tag)
 {
     /* handle special cases where the VR can be determined by some other element values */
-    if (((tag == DCM_WaveformData) || (tag == DCM_WaveformPaddingValue)) && (tag.getEVR() == EVR_ox))
+    if (((tag == DCM_WaveformData) || (tag == DCM_WaveformPaddingValue) ||
+        (tag == DCM_ChannelMinimumValue) || (tag == DCM_ChannelMaximumValue)) && (tag.getEVR() == EVR_ox))
     {
         /* case 1 (WaveformData and others): see section 8.3 in PS 3.5 */
         Uint16 bitsAlloc;
@@ -383,7 +378,11 @@ void DcmItem::checkAndUpdateVR(DcmItem &item,
     }
     else if (((tag == DCM_PixelPaddingValue) || (tag == DCM_PixelPaddingRangeLimit) ||
         (tag == DCM_HistogramFirstBinValue) || (tag == DCM_HistogramLastBinValue) ||
-        (tag == DCM_ZeroVelocityPixelValue)) && (tag.getEVR() == EVR_xs))
+        (tag == DCM_ZeroVelocityPixelValue) || (tag == DCM_SmallestImagePixelValue) ||
+        (tag == DCM_LargestImagePixelValue) || (tag == DCM_SmallestPixelValueInSeries) ||
+        (tag == DCM_LargestPixelValueInSeries) || (tag == DCM_LUTDescriptor) ||
+        (tag == DCM_RealWorldValueLastValueMapped) || (tag == DCM_RealWorldValueFirstValueMapped)) &&
+        (tag.getEVR() == EVR_xs))
     {
         /* case 2 (PixelPaddingValue and others): see section C.7.5.1, C.7.6.16.x and C.11.5 in PS 3.3 */
         Uint16 pixelRep;
@@ -964,7 +963,7 @@ OFCondition DcmItem::readTagAndLength(DcmInputStream &inStream,
     /* check if either 4 (for implicit transfer syntaxes) or 6 (for explicit transfer */
     /* syntaxes) bytes are available in (i.e. can be read from) inStream. if an error */
     /* occurred while performing this check return this error */
-    if (inStream.avail() < (xferSyn.isExplicitVR() ? 6u:4u))
+    if (inStream.avail() < OFstatic_cast(offile_off_t, xferSyn.isExplicitVR() ? 6 : 4))
         return EC_StreamNotifyClient;
 
     /* determine the byte ordering of the transfer syntax which was passed; */
@@ -1084,7 +1083,7 @@ OFCondition DcmItem::readTagAndLength(DcmInputStream &inStream,
     /* the next thing we want to do is read the value in the length field from inStream. */
     /* determine if there is a corresponding amount of bytes (for the length field) still */
     /* available in inStream. If not, return an error. */
-    if (inStream.avail() < xferSyn.sizeofTagHeader(newEVR) - bytesRead)
+    if (inStream.avail() < OFstatic_cast(offile_off_t, xferSyn.sizeofTagHeader(newEVR) - bytesRead))
     {
         inStream.putback();    // the UnsetPutbackMark is in readSubElement
         bytesRead = 0;
@@ -1153,7 +1152,7 @@ OFCondition DcmItem::readTagAndLength(DcmInputStream &inStream,
                 inStream.putback();
             }
         }
-        else if (valueLength > remainingItemBytes)
+        else if (OFstatic_cast(offile_off_t, valueLength) > remainingItemBytes)
         {
             DCMDATA_WARN("DcmItem: Element " << newTag.getTagName() << " " << newTag
                 << " larger (" << valueLength << ") than remaining bytes ("

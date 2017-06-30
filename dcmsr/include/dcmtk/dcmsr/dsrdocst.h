@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 2000-2016, OFFIS e.V.
+ *  Copyright (C) 2000-2017, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -238,20 +238,30 @@ class DCMTK_DCMSR_EXPORT DSRDocumentSubTree
                                  const OFBool startFromRoot = OFTrue,
                                  const OFBool searchIntoSub = OFTrue);
 
-    /** set internal cursor to a named node (starting from the first children of the
-     *  current node).
+    /** set internal cursor to a named node (starting from the first child of the
+     *  current node and searching on this level only).
+     *  This is just a shortcut for calling gotoChild() followed by gotoNamedNode()
+     *  with 'searchIntoSub' being OFFalse, i.e. only the first sub-level is checked.
      *  If more than one node exists with the given concept name, the first one will
-     *  be selected.  Use gotoNextNamedNode() in order to go to the next matching node.
+     *  be selected.
      ** @param  conceptName    concept name of the node to be searched for
-     *  @param  searchIntoSub  flag indicating whether to search into sub-trees
-     *                         ("deep search") or on the current level only
      ** @return ID of the new current node if successful, 0 otherwise
      */
-    virtual size_t gotoNamedChildNode(const DSRCodedEntryValue &conceptName,
-                                      const OFBool searchIntoSub = OFTrue);
+    virtual size_t gotoNamedChildNode(const DSRCodedEntryValue &conceptName);
+
+    /** set internal cursor to a named node in the subtree below the current node.
+     *  If more than one node exists with the given concept name, the first one will
+     *  be selected.  If the current node has no children, the cursor is not moved.
+     ** @param  conceptName    concept name of the node to be searched for
+     *  @param  searchIntoSub  flag indicating whether to search into sub-trees
+     *                         ("deep search") or on the first sub-level only
+     ** @return ID of the new current node if successful, 0 otherwise
+     */
+    virtual size_t gotoNamedNodeInSubTree(const DSRCodedEntryValue &conceptName,
+                                          const OFBool searchIntoSub = OFTrue);
 
     /** set internal cursor to the next named node.
-     *  Starts from "next" node, i.e. either the first children of the current node
+     *  Starts from "next" node, i.e. either the first child of the current node
      *  or the first sibling following the current node.
      ** @param  conceptName    concept name of the node to be searched for
      *  @param  searchIntoSub  flag indicating whether to search into sub-trees
@@ -274,7 +284,7 @@ class DCMTK_DCMSR_EXPORT DSRDocumentSubTree
                                      const OFBool startFromRoot = OFTrue);
 
     /** set internal cursor to the next annotated node.
-     *  Starts from "next" node, i.e. either the first children of the current node
+     *  Starts from "next" node, i.e. either the first child of the current node
      *  or the first sibling following the current node.
      ** @param  annotationText  annotation text of the node to be searched for
      ** @return ID of the new current node if successful, 0 otherwise

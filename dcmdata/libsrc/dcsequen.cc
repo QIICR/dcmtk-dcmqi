@@ -204,8 +204,19 @@ int DcmSequenceOfItems::compare(const DcmElement& rhs) const
     myThis = OFconst_cast(DcmSequenceOfItems*, this);
     myRhs = OFstatic_cast(DcmSequenceOfItems*, OFconst_cast(DcmElement*, &rhs));
 
-    /* iterate over all items and test equality */
+    /* check number of items */
+    unsigned long rhsVM = myRhs->card();
     unsigned long thisVM = myThis->card();
+    if (thisVM < rhsVM)
+    {
+        return -1;
+    }
+    else if (thisVM > rhsVM)
+    {
+        return 1;
+    }
+
+    /* iterate over all items and test equality */
     for (unsigned long count = 0; count < thisVM; count++)
     {
         DcmItem* val = myThis->getItem(count);
@@ -220,22 +231,7 @@ int DcmSequenceOfItems::compare(const DcmElement& rhs) const
                     return result;
                 }
             }
-            else
-            {
-                break; // values equal until this point (rhs shorter)
-            }
         }
-    }
-
-    /* we get here if all values are equal. Now look at the number of components. */
-    unsigned long rhsVM = myRhs->card();
-    if (thisVM < rhsVM)
-    {
-        return -1;
-    }
-    else if (thisVM > rhsVM)
-    {
-        return 1;
     }
 
     /* all values as well as VM equal: objects are equal */
@@ -792,8 +788,8 @@ OFCondition DcmSequenceOfItems::write(DcmOutputStream &outStream,
                  * in the buffer, check if the buffer is still sufficient for the requirements
                  * of this element, which may need only 8 instead of 12 bytes.
                  */
-                if ((outStream.avail() >= DCM_TagInfoLength) ||
-                    (outStream.avail() >= getTagAndLengthSize(oxfer)))
+                if ((outStream.avail() >= OFstatic_cast(offile_off_t, DCM_TagInfoLength)) ||
+                    (outStream.avail() >= OFstatic_cast(offile_off_t, getTagAndLengthSize(oxfer))))
                 {
                     if (enctype == EET_ExplicitLength)
                         setLengthField(getLength(oxfer, enctype));
@@ -916,8 +912,8 @@ OFCondition DcmSequenceOfItems::writeSignatureFormat(DcmOutputStream &outStream,
                  * in the buffer, check if the buffer is still sufficient for the requirements
                  * of this element, which may need only 8 instead of 12 bytes.
                  */
-                if ((outStream.avail() >= DCM_TagInfoLength) ||
-                    (outStream.avail() >= getTagAndLengthSize(oxfer)))
+                if ((outStream.avail() >= OFstatic_cast(offile_off_t, DCM_TagInfoLength)) ||
+                    (outStream.avail() >= OFstatic_cast(offile_off_t, getTagAndLengthSize(oxfer))))
                 {
                     if (enctype == EET_ExplicitLength)
                         setLengthField(getLength(oxfer, enctype));
