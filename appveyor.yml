@@ -30,7 +30,7 @@ artifacts:
     name: DCMTK-dcmqi
     type: zip
 deploy:
-    release: DCMTK-dcmqi-3.6.3_20180620-VS12-Win64-Release-v$(appveyor_build_version)-static
+    release: DCMTK-dcmqi-3.6.5_20200113-VS12-Win64-Release-v$(appveyor_build_version)-static
     provider: GitHub
     description: 'DCMTK packaged by appveyor for dcmqi'
     artifact: DCMTK-dcmqi
