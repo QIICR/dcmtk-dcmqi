@@ -34,8 +34,15 @@ artifacts:
   - path: DCMTK-install
     name: DCMTK-dcmqi
     type: zip
-after_build:
-  - ps: |
-        ci_addons publish_github_release qiicr/dcmtk-dcmqi `
-           --exit-success-if-missing-token `
-           --release-packages "c:\DCMTK\DCMTK-build\DCMTK-dcmqi.zip" `
+deploy:
+  release: DCMTK-dcmqi-3.6.5_20200113-VS12-Win64-Release-v$(appveyor_build_version)-static
+  description: 'DCMTK-dcmqi-3.6.5-20200113'
+  provider: GitHub
+  auth_token:
+    secure: mnRPU2KJBMkkUa4fo4ebLpsEG/gYpcAy4/X2ihGiwZiPGpkyvF1ItFFRSlUGubvf
+  artifact: DCMTK-dcmqi
+  draft: false
+  prerelease: false
+  on:
+    branch: dcmqi
+    APPVEYOR_REPO_TAG: false
