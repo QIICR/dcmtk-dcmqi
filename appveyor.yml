@@ -12,7 +12,7 @@ configuration:
 platform:
   - x64
 environment:
-  PYTHON_DIR: "C:\\Python27-x64"
+  PYTHON_DIR: "C:\\Python311-x64"
   PATH: "%PYTHON_DIR%;%PYTHON_DIR%\\Scripts;%PATH%"
   GITHUB_TOKEN:
     secure: mnRPU2KJBMkkUa4fo4ebLpsEG/gYpcAy4/X2ihGiwZiPGpkyvF1ItFFRSlUGubvf
@@ -20,6 +20,8 @@ environment:
     secure: 3+wBc5SxNqx3XjsY3EZ7afvQbLAWWcw30SPGK7q+QPA=
 before_build:
   # Install package required to automatically create or update GitHub releases
+  - where python
+  - where pip
   - pip install -U "scikit-ci-addons>=0.18.0"
   - |
   - mkdir c:\DCMTK\DCMTK-install
@@ -35,8 +37,8 @@ artifacts:
     name: DCMTK-dcmqi
     type: zip
 deploy:
-  release: DCMTK-dcmqi-3.6.5_20200113-VS12-Win64-Release-v$(appveyor_build_version)-static
-  description: 'DCMTK-dcmqi-3.6.5-20200113'
+  release: DCMTK-dcmqi-3.6.7_20220105-VS12-Win64-Release-v$(appveyor_build_version)-static
+  description: 'DCMTK-dcmqi-3.6.7-20220105'
   provider: GitHub
   auth_token:
     secure: mnRPU2KJBMkkUa4fo4ebLpsEG/gYpcAy4/X2ihGiwZiPGpkyvF1ItFFRSlUGubvf
