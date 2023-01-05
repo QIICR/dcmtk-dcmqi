@@ -1,6 +1,6 @@
 version: 0.0.{build}
 os:
-  - Visual Studio 2013
+  - Visual Studio 2022
 clone_depth: 1
 branches:
   only:
